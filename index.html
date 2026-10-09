@@ -40,7 +40,7 @@
 
     <!-- 2. Scan -->
     <section id="tab-scan" class="panel" hidden>
-      <p class="muted">Take a photo of the box labels. Each <b>JOB: 12345678</b> is matched to the aisle label (e.g. <b>B12-E</b>) printed above it. Check the results before saving.</p>
+      <p class="muted">Take a photo of the box labels. Each <b>JOB: 12345678</b> is matched to the shelf number above it (starts with B, e.g. <b>B12-E</b> or <b>B12</b>). Unclear or scratched-out labels are left unticked. Check the results before saving.</p>
       <div class="row wrap">
         <label class="button primary big">
           📷 Take photo
@@ -51,7 +51,7 @@
           <input id="gallery-input" type="file" accept="image/*" multiple hidden>
         </label>
       </div>
-      <label for="fallback-aisle">Aisle for these photos (only used if no aisle label is readable)</label>
+      <label for="fallback-aisle">Shelf for these photos (only used if no shelf number is readable)</label>
       <input id="fallback-aisle" placeholder="optional, e.g. B12-E" autocapitalize="characters">
 
       <div id="scan-status" class="status" hidden></div>
@@ -61,7 +61,7 @@
         <h2>Check results</h2>
         <p class="muted">Fix any mistakes, untick wrong rows, then save.</p>
         <table class="review">
-          <thead><tr><th></th><th>Aisle</th><th>Job number</th><th></th></tr></thead>
+          <thead><tr><th></th><th>Shelf</th><th>Job number</th><th></th></tr></thead>
           <tbody id="review-body"></tbody>
         </table>
         <div class="row wrap">
@@ -74,7 +74,7 @@
       <details class="manual">
         <summary>Type entries in manually</summary>
         <form id="manual-form" class="row wrap" autocomplete="off">
-          <input id="manual-aisle" placeholder="Aisle e.g. B12-E" autocapitalize="characters">
+          <input id="manual-aisle" placeholder="Shelf e.g. B12-E" autocapitalize="characters">
           <input id="manual-job" placeholder="Job e.g. 12345678" inputmode="numeric">
           <button type="submit" class="primary">Add</button>
         </form>

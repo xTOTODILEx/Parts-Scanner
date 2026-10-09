@@ -8,8 +8,12 @@
 
   // "JOB: 12345678" (also J0B, JO8, missing colon, etc.)
   const JOB_RE = /J[O0Q][B8]\s*[:;.,]?\s*([0-9OQDUILTZSGB|!]{8})(?![0-9])/g;
-  // "B12-E" (letter, 1-3 digits, dash, letter). Allows stray spaces and other dash characters.
-  const AISLE_RE = /(?:^|[^A-Z0-9])([A-Z])\s?([0-9OQDILSZ]{1,3})\s?[-‐‑–—~_]\s?([A-Z])(?![A-Z0-9])/g;
+  // Shelf numbers always start with B: "B12-E" or just "B12". Allows stray spaces and other dash
+  // characters. OCR often reads the B as an 8, so "812-E" is accepted too (only with the -E part,
+  // otherwise any 3-digit number would count).
+  const AISLE_RE = /(?:^|[^A-Z0-9])([B8])\s?([0-9OQDILSZ]{1,3})(?:\s?[-‐‑–—~_]\s?([A-Z]))?(?![A-Z0-9])/g;
+  // Words read with less confidence than this (0-100) are probably scratched out or damaged.
+  const LOW_CONFIDENCE = 50;
 
   function fixDigits(s) {
     return s.split('').map((c) => DIGIT_FIX[c] || c).join('');
@@ -23,13 +27,15 @@
 
   function normalizeAisle(s) {
     const t = String(s || '').toUpperCase().replace(/\s+/g, '').replace(/[‐‑–—~_]/g, '-');
-    const m = t.match(/^([A-Z])([0-9A-Z]{1,3})-?([A-Z])$/);
-    if (m) return m[1] + fixDigits(m[2]) + '-' + m[3];
+    let m = t.match(/^([B8])([0-9OQDILSZ]{1,3})-?([A-Z])$/);
+    if (m) return 'B' + fixDigits(m[2]) + '-' + m[3];
+    m = t.match(/^B([0-9OQDILSZ]{1,3})$/);
+    if (m) return 'B' + fixDigits(m[1]);
     return t;
   }
 
   function isValidJob(j) { return /^\d{8}$/.test(j); }
-  function isValidAisle(a) { return /^[A-Z]\d{1,3}-[A-Z]$/.test(a); }
+  function isValidAisle(a) { return /^B\d{1,3}(-[A-Z])?$/.test(a); }
 
   function unionBox(boxes) {
     return boxes.reduce((acc, b) => ({
@@ -48,14 +54,23 @@
       if (i) text += ' ';
       const start = text.length;
       text += String(w.text || '').toUpperCase();
-      spans.push({ start, end: text.length, bbox: w.bbox });
+      spans.push({ start, end: text.length, bbox: w.bbox, conf: w.confidence == null ? 100 : w.confidence });
     });
     return { text, spans, bbox: line.bbox };
   }
 
+  function spansIn(built, start, end) {
+    return built.spans.filter((s) => s.end > start && s.start < end);
+  }
+
   function boxForRange(built, start, end) {
-    const hit = built.spans.filter((s) => s.end > start && s.start < end).map((s) => s.bbox);
+    const hit = spansIn(built, start, end).map((s) => s.bbox);
     return hit.length ? unionBox(hit) : built.bbox;
+  }
+
+  function confForRange(built, start, end) {
+    const hit = spansIn(built, start, end);
+    return hit.length ? Math.min(...hit.map((s) => s.conf)) : 100;
   }
 
   function findTokens(lines) {
@@ -67,14 +82,18 @@
       JOB_RE.lastIndex = 0;
       while ((m = JOB_RE.exec(built.text))) {
         const job = fixDigits(m[1]);
-        if (isValidJob(job)) jobs.push({ job, bbox: boxForRange(built, m.index, m.index + m[0].length) });
+        const end = m.index + m[0].length;
+        if (isValidJob(job)) jobs.push({ job, bbox: boxForRange(built, m.index, end), conf: confForRange(built, m.index, end) });
       }
       AISLE_RE.lastIndex = 0;
       while ((m = AISLE_RE.exec(built.text))) {
         const start = m.index + m[0].indexOf(m[1]);
-        const aisle = m[1] + fixDigits(m[2]) + '-' + m[3];
-        if (isValidAisle(aisle)) aisles.push({ aisle, bbox: boxForRange(built, start, m.index + m[0].length) });
-        AISLE_RE.lastIndex = m.index + m[0].length;
+        const end = m.index + m[0].length;
+        AISLE_RE.lastIndex = end;
+        if (m[1] === '8' && !m[3]) continue;
+        if (!/[0-9]/.test(m[2])) continue; // e.g. the word "BOD" is not a shelf
+        const aisle = 'B' + fixDigits(m[2]) + (m[3] ? '-' + m[3] : '');
+        if (isValidAisle(aisle)) aisles.push({ aisle, bbox: boxForRange(built, start, end), conf: confForRange(built, start, end) });
       }
     });
 
@@ -98,7 +117,8 @@
       if (best) {
         numbers.splice(numbers.indexOf(best), 1);
         const job = fixDigits(String(best.text).toUpperCase().replace(/[^0-9A-Z|!]/g, ''));
-        jobs.push({ job, bbox: unionBox([l.bbox, best.bbox]) });
+        const conf = Math.min(l.confidence == null ? 100 : l.confidence, best.confidence == null ? 100 : best.confidence);
+        jobs.push({ job, bbox: unionBox([l.bbox, best.bbox]), conf });
       }
     });
     return { aisles, jobs };
@@ -122,7 +142,9 @@
         if (score < bestScore) { bestScore = score; best = a; }
       });
       const aisle = best ? best.aisle : fallback;
-      return { job: j.job, aisle, jobBox: j.bbox, aisleBox: best ? best.bbox : null, guessed: !best };
+      // A blurry or scratched-out label still gets listed, but unticked so it isn't saved by accident.
+      const unclear = (j.conf != null && j.conf < LOW_CONFIDENCE) || (best && best.conf != null && best.conf < LOW_CONFIDENCE);
+      return { job: j.job, aisle, jobBox: j.bbox, aisleBox: best ? best.bbox : null, guessed: !best, unclear: !!unclear };
     });
   }
 
@@ -130,15 +152,15 @@
     const lines = (data && data.lines) || [];
     const { aisles, jobs } = findTokens(lines);
     const pairs = assign(aisles, jobs, fallbackAisle);
-    // Remove exact duplicates inside one photo.
-    const seen = new Set();
-    const unique = pairs.filter((p) => {
+    // Remove exact duplicates inside one photo; if any copy was read clearly, keep it as clear.
+    const byKey = new Map();
+    pairs.forEach((p) => {
       const k = p.job + '|' + p.aisle;
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
+      const had = byKey.get(k);
+      if (!had) byKey.set(k, p);
+      else if (had.unclear && !p.unclear) byKey.set(k, p);
     });
-    return { aisles, jobs, pairs: unique };
+    return { aisles, jobs, pairs: [...byKey.values()] };
   }
 
   const api = { parseOcr, findTokens, assign, normalizeJob, normalizeAisle, isValidJob, isValidAisle };

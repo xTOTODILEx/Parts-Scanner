@@ -131,7 +131,7 @@
 
   // ---------- 2. Scan ----------
   let worker = null;
-  let review = []; // { job, aisle, on, guessed }
+  let review = []; // { job, aisle, on, guessed, unclear }
 
   async function getWorker() {
     if (worker) return worker;
@@ -177,18 +177,19 @@
   async function scanFile(w, file, n, total) {
     const canvas = await prepareImage(file);
     status('Photo ' + n + ' of ' + total + ': reading text…');
-    // Auto layout first; if no job numbers are found, retry treating the photo as scattered labels.
+    // Auto layout first. If job numbers or the shelf number are missing, read again treating the
+    // photo as scattered labels (better for a lone "B12-E"), and combine what both reads found.
     await w.setParameters({ tessedit_pageseg_mode: '3' });
-    let { data } = await w.recognize(canvas);
-    let result = Parser.parseOcr(data, $('fallback-aisle').value);
-    if (!result.jobs.length) {
-      status('Photo ' + n + ' of ' + total + ': trying again…');
+    const first = (await w.recognize(canvas)).data;
+    let result = Parser.parseOcr(first, $('fallback-aisle').value);
+    if (!result.jobs.length || !result.aisles.length) {
+      status('Photo ' + n + ' of ' + total + ': looking for missed labels…');
       await w.setParameters({ tessedit_pageseg_mode: '11' });
-      ({ data } = await w.recognize(canvas));
-      result = Parser.parseOcr(data, $('fallback-aisle').value);
+      const second = (await w.recognize(canvas)).data;
+      result = Parser.parseOcr({ lines: (first.lines || []).concat(second.lines || []) }, $('fallback-aisle').value);
     }
     drawPreview(canvas, result, file.name || 'Photo ' + n);
-    result.pairs.forEach((p) => review.push({ job: p.job, aisle: p.aisle, on: true, guessed: p.guessed }));
+    result.pairs.forEach((p) => review.push({ job: p.job, aisle: p.aisle, on: !p.unclear, guessed: p.guessed, unclear: p.unclear }));
     if (!result.pairs.length) toast('No job numbers found in photo ' + n + '. Try a closer, sharper photo.');
     renderReview();
   }
@@ -258,7 +259,7 @@
         ctx.stroke();
       }
     });
-    const cap = result.aisles.length + ' aisle label(s), ' + result.pairs.length + ' job(s) found — ' + name;
+    const cap = result.aisles.length + ' shelf label(s), ' + result.pairs.length + ' job(s) found — ' + name;
     $('previews').prepend(el('div', { class: 'preview' }, c, el('div', { class: 'cap' }, cap)));
   }
 
@@ -282,8 +283,8 @@
       });
       body.append(el('tr', { class: (r.on ? '' : 'off ') + (validAisle && validJob ? '' : 'bad') },
         el('td', {}, el('input', { type: 'checkbox', checked: r.on, onchange: (e) => { r.on = e.target.checked; renderReview(); } })),
-        el('td', {}, aisleInput, r.guessed ? el('span', { class: 'flag' }, 'no label found') : null),
-        el('td', {}, jobInput),
+        el('td', {}, aisleInput, r.guessed ? el('span', { class: 'flag' }, 'no shelf label found') : null),
+        el('td', {}, jobInput, r.unclear ? el('span', { class: 'flag' }, 'unclear – scratched?') : null),
         el('td', {}, el('button', { type: 'button', class: 'x', 'aria-label': 'Remove row', onclick: () => { review.splice(i, 1); renderReview(); } }, '✕'))));
     });
     $('review').hidden = review.length === 0;
@@ -310,7 +311,7 @@
   $('save-review').addEventListener('click', () => {
     const chosen = review.filter((r) => r.on);
     const bad = chosen.filter((r) => !Parser.isValidJob(Parser.normalizeJob(r.job)) || !Parser.normalizeAisle(r.aisle));
-    if (bad.length && !confirm(bad.length + ' row(s) do not look like "B12-E" / 8-digit job numbers. Save anyway?')) return;
+    if (bad.length && !confirm(bad.length + ' row(s) do not look like a "B12-E" / "B12" shelf and an 8-digit job number. Save anyway?')) return;
     const added = addEntries(chosen);
     toast('Saved ' + added + ' new entr' + (added === 1 ? 'y' : 'ies') + (chosen.length - added ? ' (' + (chosen.length - added) + ' already saved)' : ''));
     review = [];
