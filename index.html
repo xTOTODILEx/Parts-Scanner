@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Parts Scanner</title>
+  <meta name="description" content="Scan job numbers on boxes and look up which aisle they are in.">
+  <meta name="theme-color" content="#1f6feb">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Parts Scanner</h1>
+    <span id="count" class="muted"></span>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="find" role="tab">🔍 Find</button>
+    <button class="tab" data-tab="scan" role="tab">📷 Add photos</button>
+    <button class="tab" data-tab="data" role="tab">📊 Excel</button>
+  </nav>
+
+  <main>
+    <!-- 1. Find -->
+    <section id="tab-find" class="panel">
+      <form id="find-form" autocomplete="off">
+        <label for="find-input">Job number</label>
+        <div class="row">
+          <input id="find-input" inputmode="numeric" placeholder="e.g. 12345678" enterkeyhint="search">
+          <button type="submit" class="primary">Find</button>
+        </div>
+      </form>
+      <div id="find-result"></div>
+    </section>
+
+    <!-- 2. Scan -->
+    <section id="tab-scan" class="panel" hidden>
+      <p class="muted">Take a photo of the box labels. Each <b>JOB: 12345678</b> is matched to the aisle label (e.g. <b>B12-E</b>) printed above it. Check the results before saving.</p>
+      <div class="row wrap">
+        <label class="button primary big">
+          📷 Take photo
+          <input id="camera-input" type="file" accept="image/*" capture="environment" hidden>
+        </label>
+        <label class="button big">
+          🖼️ Choose photos
+          <input id="gallery-input" type="file" accept="image/*" multiple hidden>
+        </label>
+      </div>
+      <label for="fallback-aisle">Aisle for these photos (only used if no aisle label is readable)</label>
+      <input id="fallback-aisle" placeholder="optional, e.g. B12-E" autocapitalize="characters">
+
+      <div id="scan-status" class="status" hidden></div>
+      <div id="previews"></div>
+
+      <div id="review" hidden>
+        <h2>Check results</h2>
+        <p class="muted">Fix any mistakes, untick wrong rows, then save.</p>
+        <table class="review">
+          <thead><tr><th></th><th>Aisle</th><th>Job number</th><th></th></tr></thead>
+          <tbody id="review-body"></tbody>
+        </table>
+        <div class="row wrap">
+          <button id="add-row" type="button">+ Add row</button>
+          <button id="clear-review" type="button">Discard</button>
+          <button id="save-review" type="button" class="primary">Save</button>
+        </div>
+      </div>
+
+      <details class="manual">
+        <summary>Type entries in manually</summary>
+        <form id="manual-form" class="row wrap" autocomplete="off">
+          <input id="manual-aisle" placeholder="Aisle e.g. B12-E" autocapitalize="characters">
+          <input id="manual-job" placeholder="Job e.g. 12345678" inputmode="numeric">
+          <button type="submit" class="primary">Add</button>
+        </form>
+      </details>
+    </section>
+
+    <!-- 3. Data -->
+    <section id="tab-data" class="panel" hidden>
+      <h2>Excel database</h2>
+      <p class="muted">The database is saved on this phone. Export it as an Excel file to back it up or share it, and import an Excel file to load or merge data (columns <b>Job Number</b> and <b>Aisle</b>).</p>
+      <div class="row wrap">
+        <button id="export-btn" class="primary">⬇️ Export to Excel</button>
+        <label class="button">
+          ⬆️ Import Excel
+          <input id="import-input" type="file" accept=".xlsx,.xls,.csv" hidden>
+        </label>
+      </div>
+      <h2>All entries</h2>
+      <input id="filter-input" placeholder="Filter by job or aisle">
+      <div id="entries"></div>
+      <button id="clear-all" class="danger">Delete all data</button>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="parser.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
