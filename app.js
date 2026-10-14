@@ -131,7 +131,7 @@
 
   // ---------- 2. Scan ----------
   let worker = null;
-  let review = []; // { job, aisle, on, guessed, unclear }
+  let review = []; // { job, aisle, on, guessed, unclear, farShelf }
 
   async function getWorker() {
     if (worker) return worker;
@@ -194,16 +194,24 @@
     }
   }
 
-  async function scanFile(file, n, total) {
+  // opts.deep: also zoom into sections of the photo. opts.card: preview card to replace (re-scan).
+  async function scanFile(file, n, total, opts) {
+    opts = opts || {};
     const canvas = await prepareImage(file);
     const label = 'Photo ' + n + ' of ' + total + ': ';
     const fallback = $('fallback-aisle').value;
 
-    // 1. Barcodes: fast and exact.
+    // 1. Barcodes: every barcode in the photo, fast and exact. If no job or no shelf barcode turns
+    // up, zoom into sections of the photo in case the barcodes are just small.
     status(label + 'reading barcodes…');
     let codes = [];
+    const progress = (msg) => status(label + msg);
     try {
-      codes = await readBarcodes(canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height));
+      codes = await readAllBarcodes(canvas, progress, { whole: true, zoom: !!opts.deep });
+      const first = Parser.barcodeTokens(codes);
+      if (!opts.deep && (!first.jobs.length || !first.aisles.length)) {
+        codes = await readAllBarcodes(canvas, progress, { zoom: true }, codes);
+      }
     } catch (err) {
       console.error(err);
     }
@@ -217,15 +225,20 @@
       status(label + 'reading printed text…');
       // Auto layout first. If job numbers or the shelf number are still missing, read again treating
       // the photo as scattered labels (better for a lone "B12-E"), and combine what both reads found.
+      // The text reader gets a smaller copy (faster); its positions are scaled back up afterwards.
+      const small = shrink(canvas, 2400);
+      const k = canvas.width / small.width;
       await w.setParameters({ tessedit_pageseg_mode: '3' });
-      let lines = (await w.recognize(canvas)).data.lines || [];
+      let lines = (await w.recognize(small)).data.lines || [];
       let t = Parser.findTokens(lines);
       if (!(jobs.length || t.jobs.length) || !(aisles.length || t.aisles.length)) {
         status(label + 'looking for missed labels…');
         await w.setParameters({ tessedit_pageseg_mode: '11' });
-        lines = lines.concat((await w.recognize(canvas)).data.lines || []);
+        lines = lines.concat((await w.recognize(small)).data.lines || []);
         t = Parser.findTokens(lines);
       }
+      const up = (tok) => Object.assign({}, tok, { bbox: { x0: tok.bbox.x0 * k, y0: tok.bbox.y0 * k, x1: tok.bbox.x1 * k, y1: tok.bbox.y1 * k } });
+      t = { jobs: t.jobs.map(up), aisles: t.aisles.map(up) };
       // Keep barcode readings; add text readings only for jobs/shelves the barcodes didn't find.
       const jobSet = new Set(jobs.map((j) => j.job));
       const aisleSet = new Set(aisles.map((a) => a.aisle));
@@ -233,16 +246,90 @@
       aisles = aisles.concat(t.aisles.filter((a) => !aisleSet.has(a.aisle)));
     }
     const result = Object.assign(Parser.pairUp(aisles, jobs, fallback), { other: bc.other, barcodes: codes.length });
-    drawPreview(canvas, result, file.name || 'Photo ' + n);
-    result.pairs.forEach((p) => review.push({ job: p.job, aisle: p.aisle, on: !p.unclear, guessed: p.guessed, unclear: p.unclear }));
-    if (!result.pairs.length) toast('No job numbers found in photo ' + n + '. Try a closer, sharper photo.');
+    drawPreview(canvas, result, file, opts.card);
+    const inReview = new Set(review.map((r) => Parser.normalizeJob(r.job) + '|' + Parser.normalizeAisle(r.aisle)));
+    result.pairs.forEach((p) => {
+      if (inReview.has(p.job + '|' + p.aisle)) return;
+      review.push({ job: p.job, aisle: p.aisle, on: !p.unclear && !p.farShelf, guessed: p.guessed, unclear: p.unclear, farShelf: p.farShelf });
+    });
+    review.sort((x, y) => String(x.aisle).localeCompare(String(y.aisle), undefined, { numeric: true }) || String(x.job).localeCompare(String(y.job)));
+    if (!result.pairs.length) toast('No job numbers found in photo ' + n + '. Try "Scan harder", or a closer, sharper photo.');
     renderReview();
   }
 
-  // Shrink large photos and boost contrast; this makes reading faster and more accurate.
+  // Read every barcode in a photo. How well barcodes read depends on their size in pixels, so the whole
+  // photo is read at several sizes and the results merged. With deep = true it also zooms into
+  // overlapping sections, which finds small barcodes in a photo taken from further away (slower).
+  async function readAllBarcodes(canvas, progress, passes, found) {
+    const W = canvas.width;
+    const H = canvas.height;
+    found = found || [];
+    const tmp = document.createElement('canvas');
+    const tctx = tmp.getContext('2d', { willReadFrequently: true });
+    tctx.imageSmoothingQuality = 'high';
+
+    // Read the region (x, y, w, h) of the photo, resized so its longest side is `side` pixels.
+    // Whole-photo reads only shrink; zoomed sections may be enlarged up to 3x.
+    async function readRegion(x, y, w, h, side, maxZoom) {
+      const k = Math.min(maxZoom, side / Math.max(w, h));
+      tmp.width = Math.round(w * k);
+      tmp.height = Math.round(h * k);
+      tctx.imageSmoothingQuality = 'high';
+      tctx.drawImage(canvas, x, y, w, h, 0, 0, tmp.width, tmp.height);
+      const list = await readBarcodes(tctx.getImageData(0, 0, tmp.width, tmp.height));
+      list.forEach((r) => {
+        const pos = {};
+        ['topLeft', 'topRight', 'bottomLeft', 'bottomRight'].forEach((c) => {
+          pos[c] = { x: r.position[c].x / k + x, y: r.position[c].y / k + y };
+        });
+        const cx = (pos.topLeft.x + pos.bottomRight.x) / 2;
+        const cy = (pos.topLeft.y + pos.bottomRight.y) / 2;
+        const size = Math.max(20, Math.hypot(pos.topRight.x - pos.topLeft.x, pos.topRight.y - pos.topLeft.y));
+        // The same barcode found in another pass is only kept once.
+        if (found.some((f) => f.text === r.text && Math.hypot(f.cx - cx, f.cy - cy) < size)) return;
+        found.push({ text: r.text, format: r.format, position: pos, cx, cy });
+      });
+    }
+
+    const long = Math.max(W, H);
+    const sizes = [1400, 2000, 2800, long].filter((v, i, a) => v <= long && a.indexOf(v) === i);
+    if (passes.whole) {
+      for (const size of sizes) {
+        progress('reading barcodes… (' + found.length + ' found)');
+        await readRegion(0, 0, W, H, size, 1);
+      }
+    }
+    if (!passes.zoom) return found;
+    // Overlapping sections (4 x 4), zoomed in.
+    for (const n of [4]) {
+      const tw = Math.min(W, Math.ceil((W / n) * 1.4));
+      const th = Math.min(H, Math.ceil((H / n) * 1.4));
+      for (let row = 0; row < n; row++) {
+        for (let col = 0; col < n; col++) {
+          progress('zooming in for small barcodes… (' + found.length + ' found)');
+          const x = Math.max(0, Math.min(W - tw, Math.round(((col + 0.5) * W) / n - tw / 2)));
+          const y = Math.max(0, Math.min(H - th, Math.round(((row + 0.5) * H) / n - th / 2)));
+          await readRegion(x, y, tw, th, 3200, 3);
+        }
+      }
+    }
+    return found;
+  }
+
+  function shrink(src, max) {
+    const scale = Math.min(1, max / Math.max(src.width, src.height));
+    if (scale === 1) return src;
+    const c = document.createElement('canvas');
+    c.width = Math.round(src.width * scale);
+    c.height = Math.round(src.height * scale);
+    c.getContext('2d').drawImage(src, 0, 0, c.width, c.height);
+    return c;
+  }
+
+  // Keep full detail for small barcodes (up to 4096 px) and boost contrast.
   async function prepareImage(file) {
     const img = await loadImage(file);
-    const MAX = 3000;
+    const MAX = 4096;
     const scale = Math.min(1, MAX / Math.max(img.width, img.height));
     const c = document.createElement('canvas');
     c.width = Math.round(img.width * scale);
@@ -279,7 +366,8 @@
   }
 
   // Show the photo with found aisles (blue) and jobs (green) boxed, and a line joining each pair.
-  function drawPreview(src, result, name) {
+  function drawPreview(src, result, file, oldCard) {
+    const name = file.name || 'photo';
     const c = document.createElement('canvas');
     const scale = Math.min(1, 1200 / src.width);
     c.width = Math.round(src.width * scale);
@@ -307,7 +395,18 @@
     let cap = result.aisles.length + ' shelf label(s), ' + result.pairs.length + ' job(s) found (' +
       (result.barcodes || 0) + ' barcode' + (result.barcodes === 1 ? '' : 's') + ' read) — ' + name;
     if (result.other && result.other.length) cap += '. Other barcodes ignored: ' + result.other.slice(0, 6).join(', ');
-    $('previews').prepend(el('div', { class: 'preview' }, c, el('div', { class: 'cap' }, cap)));
+    const card = el('div', { class: 'preview' }, c, el('div', { class: 'cap' }, cap));
+    // Re-scan this photo zoomed in, for barcodes the quick read missed.
+    card.append(el('button', { type: 'button', class: 'harder', onclick: async (e) => {
+      e.target.disabled = true;
+      try {
+        await scanFile(file, 1, 1, { deep: true, card });
+      } finally {
+        status('');
+      }
+    } }, '🔍 Scan harder (missed some?)'));
+    if (oldCard && oldCard.parentNode) oldCard.replaceWith(card);
+    else $('previews').prepend(card);
   }
 
   function renderReview() {
@@ -320,7 +419,8 @@
         type: 'text', value: r.aisle, placeholder: 'B12-E', autocapitalize: 'characters',
         class: validAisle ? '' : 'invalid',
         oninput: (e) => { r.aisle = e.target.value; },
-        onchange: renderReview,
+        // Correcting the shelf of a "check shelf" row means it has been checked.
+        onchange: () => { if (r.farShelf || r.guessed) { r.farShelf = false; r.guessed = false; r.on = true; } renderReview(); },
       });
       const jobInput = el('input', {
         type: 'text', value: r.job, inputmode: 'numeric', placeholder: '12345678',
@@ -330,7 +430,8 @@
       });
       body.append(el('tr', { class: (r.on ? '' : 'off ') + (validAisle && validJob ? '' : 'bad') },
         el('td', {}, el('input', { type: 'checkbox', checked: r.on, onchange: (e) => { r.on = e.target.checked; renderReview(); } })),
-        el('td', {}, aisleInput, r.guessed ? el('span', { class: 'flag' }, 'no shelf label found') : null),
+        el('td', {}, aisleInput, r.guessed ? el('span', { class: 'flag' }, 'no shelf label found')
+          : r.farShelf ? el('span', { class: 'flag' }, 'check shelf – its label may be missed') : null),
         el('td', {}, jobInput, r.unclear ? el('span', { class: 'flag' }, 'unclear – scratched?') : null),
         el('td', {}, el('button', { type: 'button', class: 'x', 'aria-label': 'Remove row', onclick: () => { review.splice(i, 1); renderReview(); } }, '✕'))));
     });

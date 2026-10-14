@@ -40,11 +40,9 @@
 
     <!-- 2. Scan -->
     <section id="tab-scan" class="panel" hidden>
-      <p class="muted">Scan the <b>barcodes</b> on the labels. Each job barcode is matched to the shelf barcode (starts with B, e.g. <b>B12-D</b>) above it, or to the last shelf you scanned. Check the results before saving.</p>
-      <button id="live-btn" type="button" class="primary big wide">▦ Live barcode scan</button>
-      <p class="muted small">Or take a photo: barcodes are read first, and the printed <b>JOB: 12345678</b> text is used if a barcode can't be read.</p>
+      <p class="muted">Take one photo of the boxes. <b>Every barcode in the photo</b> is read at once, and each job barcode is matched to the shelf barcode (starts with B, e.g. <b>B12-D</b>) above it. Check the results before saving.</p>
       <div class="row wrap">
-        <label class="button big">
+        <label class="button primary big">
           📷 Take photo
           <input id="camera-input" type="file" accept="image/*" capture="environment" hidden>
         </label>
@@ -53,6 +51,8 @@
           <input id="gallery-input" type="file" accept="image/*" multiple hidden>
         </label>
       </div>
+      <p class="muted small">Tip: get all the labels in the picture but as close as you can, and hold still so it's sharp. If the barcodes can't be read, the printed <b>JOB: 12345678</b> text is used.</p>
+      <button id="live-btn" type="button" class="big wide">▦ Live scan (one barcode at a time)</button>
       <label for="fallback-aisle">Shelf for these photos (only used if no shelf number is readable)</label>
       <input id="fallback-aisle" placeholder="optional, e.g. B12-E" autocapitalize="characters">
       <label class="check"><input id="also-text" type="checkbox"> Also read printed text in photos (slower, finds jobs without a readable barcode)</label>
