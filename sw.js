@@ -1,5 +1,5 @@
 // Lets the app open without internet after the first visit.
-const CACHE = 'parts-scanner-v2';
+const CACHE = 'parts-scanner-v3';
 const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'parser.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -23,7 +23,7 @@ self.addEventListener('fetch', (e) => {
       caches.open(CACHE).then((c) => c.put(req, copy));
       return res;
     }).catch(() => caches.match(req).then((r) => r || caches.match('index.html'))));
-  } else if (url.hostname === 'cdn.jsdelivr.net' || url.hostname.endsWith('tessdata.projectnaptha.com')) {
+  } else if (url.hostname.endsWith('jsdelivr.net') || url.hostname.endsWith('tessdata.projectnaptha.com')) {
     // Libraries and OCR language data never change for a pinned version: cache first.
     e.respondWith(caches.match(req).then((hit) => hit || fetch(req).then((res) => {
       if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); }

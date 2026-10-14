@@ -40,9 +40,11 @@
 
     <!-- 2. Scan -->
     <section id="tab-scan" class="panel" hidden>
-      <p class="muted">Take a photo of the box labels. Each <b>JOB: 12345678</b> is matched to the shelf number above it (starts with B, e.g. <b>B12-E</b> or <b>B12</b>). Unclear or scratched-out labels are left unticked. Check the results before saving.</p>
+      <p class="muted">Scan the <b>barcodes</b> on the labels. Each job barcode is matched to the shelf barcode (starts with B, e.g. <b>B12-D</b>) above it, or to the last shelf you scanned. Check the results before saving.</p>
+      <button id="live-btn" type="button" class="primary big wide">▦ Live barcode scan</button>
+      <p class="muted small">Or take a photo: barcodes are read first, and the printed <b>JOB: 12345678</b> text is used if a barcode can't be read.</p>
       <div class="row wrap">
-        <label class="button primary big">
+        <label class="button big">
           📷 Take photo
           <input id="camera-input" type="file" accept="image/*" capture="environment" hidden>
         </label>
@@ -53,6 +55,20 @@
       </div>
       <label for="fallback-aisle">Shelf for these photos (only used if no shelf number is readable)</label>
       <input id="fallback-aisle" placeholder="optional, e.g. B12-E" autocapitalize="characters">
+      <label class="check"><input id="also-text" type="checkbox"> Also read printed text in photos (slower, finds jobs without a readable barcode)</label>
+
+      <div id="live" class="live" hidden>
+        <div class="live-head">
+          <div>Shelf: <b id="live-shelf">none yet</b></div>
+          <button id="live-done" type="button" class="primary">Done</button>
+        </div>
+        <div class="live-view">
+          <video id="live-video" playsinline muted autoplay></video>
+          <canvas id="live-overlay"></canvas>
+        </div>
+        <div id="live-msg" class="live-msg">Point the camera at a shelf barcode, then at the job barcodes on that shelf.</div>
+        <div id="live-list" class="live-list"></div>
+      </div>
 
       <div id="scan-status" class="status" hidden></div>
       <div id="previews"></div>
@@ -101,6 +117,7 @@
 
   <div id="toast" class="toast" hidden></div>
 
+  <script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.4/dist/iife/reader/index.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="parser.js"></script>
