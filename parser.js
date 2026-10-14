@@ -142,9 +142,17 @@
         if (score < bestScore) { bestScore = score; best = a; }
       });
       const aisle = best ? best.aisle : fallback;
+      // If the nearest shelf label is far off to the side, this job's own shelf label was probably
+      // missed (e.g. not readable), so the match needs checking.
+      let farShelf = false;
+      if (best) {
+        const jw = Math.max(j.bbox.x1 - j.bbox.x0, jh * 2);
+        const ac = (best.bbox.x0 + best.bbox.x1) / 2;
+        farShelf = Math.abs(jc.x - ac) > jw * 3.5;
+      }
       // A blurry or scratched-out label still gets listed, but unticked so it isn't saved by accident.
       const unclear = (j.conf != null && j.conf < LOW_CONFIDENCE) || (best && best.conf != null && best.conf < LOW_CONFIDENCE);
-      return { job: j.job, aisle, jobBox: j.bbox, aisleBox: best ? best.bbox : null, guessed: !best, unclear: !!unclear };
+      return { job: j.job, aisle, jobBox: j.bbox, aisleBox: best ? best.bbox : null, guessed: !best, unclear: !!unclear, farShelf };
     });
   }
 

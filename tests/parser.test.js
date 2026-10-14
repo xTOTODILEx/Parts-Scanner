@@ -79,6 +79,10 @@ assert.deepStrictEqual(P.classifyCode('b7'), { type: 'shelf', aisle: 'B7' });
 assert.deepStrictEqual(P.classifyCode('JOB 1234-5678'), { type: 'job', job: '12345678' });
 assert.strictEqual(P.classifyCode('123456789'), null);
 
+// A job far to the side of the only shelf label found (its own label was missed) is flagged.
+r = P.parseBarcodes([code('B21-A', 100, 50, 240, 52), code('30000000', 380, 200, 500, 202), code('34444444', 1160, 200, 1280, 202)]);
+assert.deepStrictEqual(r.pairs.map((p) => p.job + ' ' + p.farShelf), ['30000000 false', '34444444 true']);
+
 // Normalizers
 assert.strictEqual(P.normalizeJob('job: 1234 5678'), '12345678');
 assert.strictEqual(P.normalizeAisle('b12 e'), 'B12-E');

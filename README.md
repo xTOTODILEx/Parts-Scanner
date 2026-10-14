@@ -2,9 +2,11 @@
 
 A phone app for finding which aisle a job is in.
 
-- **📷 Add photos**: scan the **barcodes** on the labels.
-  - **Live barcode scan** (fastest): point the camera at a shelf barcode (like `B12-D`), then at the job barcodes on that shelf. Each new job beeps and is added under the current shelf. Scan the next shelf's barcode to switch shelves. If a shelf barcode and job barcodes are in view at the same time, each job goes to the shelf barcode above it. Tap **Done** to review.
-  - **Take photo / Choose photos**: every barcode in the photo is read and each job is matched to the shelf barcode above it. If the photo has no readable job or shelf barcode, the app reads the printed text instead (`JOB: 12345678`, `B12-E`). Tick **Also read printed text** to always do both.
+- **📷 Add photos**: take **one photo** of the boxes and the app reads **every barcode in it at once**.
+  - Each job barcode is matched to the shelf barcode (like `B12-D`) above it. If a job's own shelf barcode couldn't be read, it shows up **unticked** with "check shelf" so it isn't filed under the wrong shelf; fix the shelf and it ticks itself.
+  - If the photo has no readable job or shelf barcode, the app zooms into parts of the photo automatically. Missed some? Tap **🔍 Scan harder** under the photo to zoom in on it again.
+  - If barcodes still can't be read, the printed text (`JOB: 12345678`, `B12-E`) is used. Tick **Also read printed text** to always do both.
+  - **Live scan (one barcode at a time)** is still there: point at a shelf barcode, then at the job barcodes on that shelf.
   - Shelf numbers always start with **B** (`B12-E` or `B12`); other barcodes are ignored and listed under the photo. Scratched or unclear printed labels show up **unticked**. You check and fix the results, then save them.
 - **🔍 Find**: type a job number to see its aisle. If a job is in more than one aisle, every aisle is shown.
 - **📊 Excel**: export the database as an `.xlsx` file, or import one (columns `Job Number` and `Aisle`). The export has two sheets:
@@ -34,7 +36,7 @@ The first scan needs internet so the app can download its barcode and text reade
 
 ## Tips for good scans
 
-- For barcodes, hold the phone so the barcode fills about a third of the screen width and is not blurry; the green box shows it has been read.
+- Fit all the labels in the photo but get as close as you can. Hold still so the photo is sharp; blurry or very small barcodes can't be read even with **Scan harder**.
 
 - Hold the phone straight on to the labels, fill the screen with them, and avoid glare.
 - One or two boxes per photo works better than a whole shelf.
