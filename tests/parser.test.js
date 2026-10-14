@@ -65,6 +65,20 @@ const ok = word('JOB:99999999', 0, 80, 120, 100); ok.confidence = 90;
 r = P.parseOcr({ lines: [line(word('B12-E', 0, 0, 50, 20)), line(low), line(ok)] });
 assert.deepStrictEqual(r.pairs.map((p) => p.job + ' ' + p.unclear), ['88888888 true', '99999999 false']);
 
+// Barcodes: values are classified as job / shelf, positions used for matching.
+const code = (text, x0, y0, x1, y1) => ({ text, position: { topLeft: { x: x0, y: y0 }, topRight: { x: x1, y: y0 },
+  bottomLeft: { x: x0, y: y1 }, bottomRight: { x: x1, y: y1 } } });
+r = P.parseBarcodes([
+  code('B12-D', 100, 50, 300, 52), code('B14-A', 700, 50, 900, 52),
+  code('12345678', 100, 200, 300, 202), code('JOB:87654321', 700, 200, 900, 202),
+  code('12345678', 700, 300, 900, 302), code('SN-99XZ', 0, 900, 50, 950),
+]);
+assert.deepStrictEqual(pairs(r), ['12345678 B12-D', '87654321 B14-A', '12345678 B14-A']);
+assert.deepStrictEqual(r.other, ['SN-99XZ']);
+assert.deepStrictEqual(P.classifyCode('b7'), { type: 'shelf', aisle: 'B7' });
+assert.deepStrictEqual(P.classifyCode('JOB 1234-5678'), { type: 'job', job: '12345678' });
+assert.strictEqual(P.classifyCode('123456789'), null);
+
 // Normalizers
 assert.strictEqual(P.normalizeJob('job: 1234 5678'), '12345678');
 assert.strictEqual(P.normalizeAisle('b12 e'), 'B12-E');

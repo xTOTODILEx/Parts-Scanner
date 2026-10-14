@@ -148,9 +148,41 @@
     });
   }
 
-  function parseOcr(data, fallbackAisle) {
-    const lines = (data && data.lines) || [];
-    const { aisles, jobs } = findTokens(lines);
+  // What a barcode's value means: a job number, a shelf number, or something else.
+  function classifyCode(text) {
+    const t = String(text || '').toUpperCase().trim();
+    const job = t.replace(/^J[O0]B\s*[:;.,#-]?\s*/, '').replace(/[\s-]+/g, '');
+    if (/^\d{8}$/.test(job)) return { type: 'job', job };
+    const aisle = normalizeAisle(t.replace(/^(SHELF|LOC(ATION)?|AISLE)\s*[:;.,#-]?\s*/, ''));
+    if (isValidAisle(aisle)) return { type: 'shelf', aisle };
+    return null;
+  }
+
+  // Turn barcode reader results ({ text, position: { topLeft, topRight, bottomLeft, bottomRight } })
+  // into the same shelf/job tokens the text reader produces. Barcodes are exact, so confidence is 100.
+  function barcodeTokens(results) {
+    const aisles = [];
+    const jobs = [];
+    const other = [];
+    (results || []).forEach((r) => {
+      const p = r.position || {};
+      const pts = [p.topLeft, p.topRight, p.bottomLeft, p.bottomRight].filter(Boolean);
+      const bbox = pts.length ? {
+        x0: Math.min(...pts.map((q) => q.x)), y0: Math.min(...pts.map((q) => q.y)),
+        x1: Math.max(...pts.map((q) => q.x)), y1: Math.max(...pts.map((q) => q.y)),
+      } : { x0: 0, y0: 0, x1: 0, y1: 0 };
+      // Linear barcodes report a thin box; give it some height so "above" comparisons work.
+      if (bbox.y1 - bbox.y0 < 4) bbox.y1 = bbox.y0 + 4;
+      const c = classifyCode(r.text);
+      if (!c) { if (r.text) other.push(r.text); return; }
+      if (c.type === 'job') jobs.push({ job: c.job, bbox, conf: 100, barcode: true });
+      else aisles.push({ aisle: c.aisle, bbox, conf: 100, barcode: true });
+    });
+    return { aisles, jobs, other };
+  }
+
+  // Match jobs to shelves and drop duplicates. Tokens may come from barcodes, text, or both.
+  function pairUp(aisles, jobs, fallbackAisle) {
     const pairs = assign(aisles, jobs, fallbackAisle);
     // Remove exact duplicates inside one photo; if any copy was read clearly, keep it as clear.
     const byKey = new Map();
@@ -163,7 +195,17 @@
     return { aisles, jobs, pairs: [...byKey.values()] };
   }
 
-  const api = { parseOcr, findTokens, assign, normalizeJob, normalizeAisle, isValidJob, isValidAisle };
+  function parseOcr(data, fallbackAisle) {
+    const { aisles, jobs } = findTokens((data && data.lines) || []);
+    return pairUp(aisles, jobs, fallbackAisle);
+  }
+
+  function parseBarcodes(results, fallbackAisle) {
+    const t = barcodeTokens(results);
+    return Object.assign(pairUp(t.aisles, t.jobs, fallbackAisle), { other: t.other });
+  }
+
+  const api = { parseOcr, parseBarcodes, barcodeTokens, classifyCode, pairUp, findTokens, assign, normalizeJob, normalizeAisle, isValidJob, isValidAisle };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Parser = api;
 })(typeof window !== 'undefined' ? window : this);
