@@ -1,54 +1,45 @@
 (function () {
   'use strict';
 
-  const STORE_KEY = 'partsScanner.entries.v1';
+  const STORE_KEY = 'badPartFinder.scans.v1';
+  const PO_KEY = 'badPartFinder.po.v1';
+  const BAD = 'BAD PART';
+  const OK = 'Not problematic';
   const $ = (id) => document.getElementById(id);
 
   // ---------- Storage ----------
-  // Each entry: { job: '12345678', aisle: 'B12-E', added: ISO date }
-  let entries = load();
+  // Each scan: { po, code, mat, result: 'BAD PART' | 'Not problematic', at: ISO date }
+  let scans = load(STORE_KEY, []);
+  let currentPo = load(PO_KEY, '');
 
-  function load() {
+  function load(key, fallback) {
     try {
-      const raw = localStorage.getItem(STORE_KEY);
-      const list = raw ? JSON.parse(raw) : [];
-      return Array.isArray(list) ? list : [];
+      const raw = localStorage.getItem(key);
+      const v = raw ? JSON.parse(raw) : fallback;
+      return Array.isArray(fallback) ? (Array.isArray(v) ? v : fallback) : (typeof v === 'string' ? v : fallback);
     } catch (e) {
-      return [];
+      return fallback;
+    }
+  }
+
+  function save(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch (e) {
+      toast('Could not save on this phone: ' + e.message);
     }
   }
 
   function persist() {
-    try {
-      localStorage.setItem(STORE_KEY, JSON.stringify(entries));
-    } catch (e) {
-      toast('Could not save on this phone: ' + e.message);
-    }
+    save(STORE_KEY, scans);
     updateCount();
-  }
-
-  // Adds pairs, skipping exact job+aisle duplicates. Returns how many were new.
-  function addEntries(pairs) {
-    const have = new Set(entries.map((e) => e.job + '|' + e.aisle));
-    const now = new Date().toISOString();
-    let added = 0;
-    pairs.forEach((p) => {
-      const job = Parser.normalizeJob(p.job);
-      const aisle = Parser.normalizeAisle(p.aisle);
-      if (!job || !aisle) return;
-      const k = job + '|' + aisle;
-      if (have.has(k)) return;
-      have.add(k);
-      entries.push({ job, aisle, added: p.added || now });
-      added++;
-    });
-    if (added) persist();
-    return added;
+    renderPos();
+    renderRecent();
   }
 
   function updateCount() {
-    const jobs = new Set(entries.map((e) => e.job)).size;
-    $('count').textContent = jobs + ' job' + (jobs === 1 ? '' : 's');
+    const bad = scans.filter((s) => s.result === BAD).length;
+    $('count').textContent = scans.length + ' scanned · ' + bad + ' bad';
   }
 
   // Ask the browser not to clear our data when space is low.
@@ -75,8 +66,8 @@
     return n;
   }
 
-  function fmtDate(iso) {
-    try { return new Date(iso).toLocaleDateString(); } catch (e) { return ''; }
+  function fmtTime(iso) {
+    try { return new Date(iso).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }); } catch (e) { return ''; }
   }
 
   // ---------- Tabs ----------
@@ -85,65 +76,145 @@
     document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
     document.querySelectorAll('.panel').forEach((p) => { p.hidden = p.id !== 'tab-' + name; });
     if (name === 'data') renderEntries();
-    if (name === 'find') $('find-input').focus();
   }
 
-  // ---------- 1. Find ----------
-  $('find-form').addEventListener('submit', (e) => { e.preventDefault(); find(); });
-  $('find-input').addEventListener('input', () => { if ($('find-input').value.trim() === '') $('find-result').replaceChildren(); });
+  // ---------- POs ----------
+  function renderPos() {
+    const found = new Set(scans.filter((s) => s.result === BAD).map((s) => s.code));
+    const list = $('po-list');
+    list.replaceChildren();
+    Parts.POS.forEach((p) => {
+      const nFound = p.parts.filter((x) => found.has(x.code)).length;
+      const selected = currentPo === p.po;
+      list.append(el('div', { class: 'po-card' + (selected ? ' selected' : '') },
+        el('button', { type: 'button', class: 'po-pick', onclick: () => setPo(selected ? '' : p.po) },
+          el('span', { class: 'po-num' }, p.po),
+          el('span', { class: 'po-sub' }, p.poMads.join(' / ')),
+          el('span', { class: 'po-sub' }, 'DMG order ' + p.dmgOrders.join(', ')),
+          el('span', { class: 'po-count' + (nFound ? ' hit' : '') },
+            p.parts.length + ' bad part' + (p.parts.length === 1 ? '' : 's') + ' · ' + nFound + ' found'),
+          selected ? el('span', { class: 'po-tick' }, '✓ checking') : null),
+        el('details', { class: 'po-serials' },
+          el('summary', {}, 'Bad serial numbers'),
+          el('ul', {}, p.parts.map((x) => el('li', { class: found.has(x.code) ? 'found' : '' },
+            x.code, found.has(x.code) ? ' 🚩 found' : '', el('small', {}, ' ' + x.poMad + ' · ' + x.dmgOrder)))))));
+    });
+    $('current-po').textContent = currentPo || 'none picked';
+  }
 
-  function find() {
-    const q = Parser.normalizeJob($('find-input').value);
-    const out = $('find-result');
+  function setPo(po) {
+    currentPo = po;
+    save(PO_KEY, currentPo);
+    renderPos();
+  }
+
+  // ---------- Checking a part ----------
+  // Check one scanned or typed value. Saves the part the first time it is seen.
+  // Returns null if it is not a part code, otherwise { code, mat, bad, scan, isNew }.
+  function checkPart(text) {
+    const part = Parts.readPartCode(text);
+    if (!part) return null;
+    const bad = Parts.findBad(part.code);
+    let scan = scans.find((s) => s.code === part.code);
+    const isNew = !scan;
+    if (isNew) {
+      scan = {
+        // The PO of the box being checked; for a bad part with no PO picked, the PO it is listed under.
+        po: currentPo || (bad ? bad.po : ''),
+        code: part.code,
+        mat: part.mat,
+        result: bad ? BAD : OK,
+        at: new Date().toISOString(),
+      };
+      scans.push(scan);
+      persist();
+    }
+    return { code: part.code, mat: part.mat, bad, scan, isNew };
+  }
+
+  function resultCard(r) {
+    const notes = [];
+    if (!r.isNew) notes.push('Already scanned ' + fmtTime(r.scan.at) + (r.scan.po ? ' (PO ' + r.scan.po + ')' : '') + '.');
+    if (r.bad) {
+      if (currentPo && currentPo !== r.bad.po) notes.push('Listed under PO ' + r.bad.po + ', not the PO you picked (' + currentPo + ').');
+      return el('div', { class: 'result bad' },
+        el('div', { class: 'result-title' }, '🚩 BAD PART'),
+        el('div', { class: 'result-text' }, 'This is the troublesome part. Set it aside.'),
+        el('div', { class: 'result-code' }, r.code),
+        el('div', { class: 'result-meta' }, 'PO ' + r.bad.po + ' (' + r.bad.poMad + ') · DMG order ' + r.bad.dmgOrder + (r.mat ? ' · mat ' + r.mat : '')),
+        notes.map((n) => el('div', { class: 'result-note' }, n)));
+    }
+    return el('div', { class: 'result ok' },
+      el('div', { class: 'result-title' }, '✓ Not a problematic part'),
+      el('div', { class: 'result-code' }, r.code),
+      r.mat ? el('div', { class: 'result-meta' }, 'mat ' + r.mat) : null,
+      notes.map((n) => el('div', { class: 'result-note' }, n)));
+  }
+
+  function showResults(list, extra) {
+    const out = $('results');
     out.replaceChildren();
-    if (!q) return;
+    if (extra) out.append(extra);
+    // Bad parts first.
+    list.slice().sort((a, b) => (b.bad ? 1 : 0) - (a.bad ? 1 : 0)).forEach((r) => out.append(resultCard(r)));
+    out.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 
-    const exact = entries.filter((e) => e.job === q);
-    if (exact.length) {
-      out.append(resultCard(q, exact));
+  function renderRecent() {
+    const box = $('recent');
+    box.replaceChildren();
+    const last = scans.slice(-8).reverse();
+    if (!last.length) {
+      box.append(el('p', { class: 'muted' }, 'Nothing scanned yet.'));
       return;
     }
-    out.append(el('div', { class: 'card' }, el('div', { class: 'none' }, 'Job ' + q + ' not found.')));
-
-    if (q.length >= 3) {
-      const byJob = groupByJob(entries.filter((e) => e.job.includes(q)));
-      const jobs = Object.keys(byJob).slice(0, 20);
-      if (jobs.length) {
-        out.append(el('h2', {}, 'Similar job numbers'));
-        jobs.forEach((j) => out.append(resultCard(j, byJob[j])));
-      }
-    }
+    last.forEach((s) => box.append(entryRow(s)));
   }
 
-  function groupByJob(list) {
-    const g = {};
-    list.forEach((e) => { (g[e.job] = g[e.job] || []).push(e); });
-    return g;
+  function entryRow(s, onDelete) {
+    return el('div', { class: 'entry' },
+      el('div', {},
+        el('span', { class: 'badge ' + (s.result === BAD ? 'bad' : 'ok') }, s.result === BAD ? '🚩 BAD' : '✓ OK'),
+        ' ', el('b', {}, s.code),
+        el('small', {}, (s.po ? 'PO ' + s.po + ' · ' : 'no PO · ') + fmtTime(s.at))),
+      onDelete ? el('button', { class: 'x', 'aria-label': 'Delete', onclick: onDelete }, '🗑') : null);
   }
 
-  function resultCard(job, list) {
-    const aisles = [...new Set(list.map((e) => e.aisle))].sort();
-    return el('div', { class: 'card' },
-      el('div', { class: 'result-job' }, 'JOB: ' + job),
-      el('div', { class: 'aisles' }, aisles.map((a) => el('span', { class: 'aisle-badge' }, a))),
-      aisles.length > 1 ? el('div', { class: 'note' }, '⚠️ This job is in ' + aisles.length + ' aisles') : null);
+  $('manual-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const r = checkPart($('manual-code').value);
+    if (!r) { toast('That doesn\'t look like a GA/NA serial number'); return; }
+    if (r.bad) alarm(); else beep(880);
+    showResults([r]);
+    $('manual-code').value = '';
+  });
+
+  // ---------- Feedback ----------
+  let audio = null;
+  function tone(freq, start, len) {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audio.createOscillator();
+    const g = audio.createGain();
+    o.frequency.value = freq;
+    g.gain.value = 0.12;
+    o.connect(g);
+    g.connect(audio.destination);
+    o.start(audio.currentTime + start);
+    o.stop(audio.currentTime + start + len);
   }
 
-  // ---------- 2. Scan ----------
-  let worker = null;
-  let review = []; // { job, aisle, on, guessed, unclear, farShelf }
-
-  async function getWorker() {
-    if (worker) return worker;
-    status('Loading text reader (first time needs internet)…');
-    worker = await Tesseract.createWorker('eng', 1, Object.assign({
-      logger: (m) => {
-        if (m.status === 'recognizing text') status('Reading text… ' + Math.round(m.progress * 100) + '%');
-      },
-    }, window.OCR_OPTIONS)); // OCR_OPTIONS lets tests point at local copies of the OCR files.
-    return worker;
+  function beep(freq) {
+    try { if (navigator.vibrate) navigator.vibrate(60); } catch (e) { /* ignore */ }
+    try { tone(freq, 0, 0.09); } catch (e) { /* sound is optional */ }
   }
 
+  // Bad part: long buzz and a low two-tone alarm.
+  function alarm() {
+    try { if (navigator.vibrate) navigator.vibrate([400, 150, 400, 150, 400]); } catch (e) { /* ignore */ }
+    try { tone(330, 0, 0.25); tone(220, 0.3, 0.25); tone(330, 0.6, 0.25); } catch (e) { /* sound is optional */ }
+  }
+
+  // ---------- Photos ----------
   function status(msg) {
     const s = $('scan-status');
     s.hidden = !msg;
@@ -153,8 +224,258 @@
   $('camera-input').addEventListener('change', onFiles);
   $('gallery-input').addEventListener('change', onFiles);
 
+  async function onFiles(e) {
+    const files = [...e.target.files];
+    e.target.value = '';
+    if (!files.length) return;
+    if (!barcodeReaderLoaded()) { toast('Scanner did not load. Connect to the internet and reload.'); return; }
+    const all = [];
+    const previews = el('div', {});
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const res = await scanPhoto(files[i], 'Photo ' + (i + 1) + ' of ' + files.length + ': ', false);
+        all.push(...res.results);
+        previews.append(res.card);
+      }
+    } catch (err) {
+      console.error(err);
+      toast('Something went wrong: ' + (err && err.message ? err.message : err));
+    }
+    status('');
+    finishPhotos(all, previews);
+  }
+
+  function finishPhotos(all, previews) {
+    const nBad = all.filter((r) => r.bad).length;
+    if (nBad) alarm(); else if (all.length) beep(880);
+    const summary = el('div', { class: 'summary ' + (nBad ? 'bad' : all.length ? 'ok' : '') },
+      all.length
+        ? (nBad ? '🚩 ' + nBad + ' BAD part' + (nBad === 1 ? '' : 's') + ' in ' : '✓ No bad parts in ') + all.length + ' part' + (all.length === 1 ? '' : 's') + ' scanned'
+        : 'No part QR codes found. Try "Scan harder", or a closer, sharper photo.');
+    showResults(all, el('div', {}, summary, previews));
+  }
+
+  // Read every part QR code in one photo. Returns { results, card } where card shows the photo
+  // with bad parts boxed in red and good parts in green.
+  async function scanPhoto(file, label, deep) {
+    status(label + 'reading QR codes…');
+    const canvas = await prepareImage(file);
+    const progress = (msg) => status(label + msg);
+    let codes = await readAllBarcodes(canvas, progress, { whole: true, zoom: deep });
+    if (!deep && !codes.some((c) => Parts.readPartCode(c.text))) {
+      // Nothing found: the QR codes may just be small in the photo, so zoom in.
+      codes = await readAllBarcodes(canvas, progress, { zoom: true }, codes);
+    }
+    const results = [];
+    const seen = new Set();
+    const marks = [];
+    codes.forEach((c) => {
+      const r = checkPart(c.text);
+      marks.push({ position: c.position, kind: r ? (r.bad ? 'bad' : 'ok') : 'other' });
+      if (r && !seen.has(r.code)) { seen.add(r.code); results.push(r); }
+    });
+    const card = photoCard(canvas, marks, results, file, label);
+    return { results, card };
+  }
+
+  function photoCard(src, marks, results, file) {
+    const c = document.createElement('canvas');
+    const scale = Math.min(1, 1200 / src.width);
+    c.width = Math.round(src.width * scale);
+    c.height = Math.round(src.height * scale);
+    const ctx = c.getContext('2d');
+    ctx.drawImage(src, 0, 0, c.width, c.height);
+    marks.forEach((m) => drawQuad(ctx, m.position, scale, m.kind, Math.max(3, c.width / 150)));
+    const nBad = results.filter((r) => r.bad).length;
+    const card = el('div', { class: 'preview' }, c,
+      el('div', { class: 'cap' }, results.length + ' part' + (results.length === 1 ? '' : 's') + ' found' +
+        (nBad ? ', ' + nBad + ' bad (red box)' : '') + ' — ' + (file.name || 'photo')));
+    card.append(el('button', { type: 'button', class: 'harder', onclick: async (e) => {
+      e.target.disabled = true;
+      try {
+        const res = await scanPhoto(file, 'Scanning harder: ', true);
+        card.replaceWith(res.card);
+        finishPhotos(res.results, el('div', {}, res.card));
+      } finally {
+        status('');
+      }
+    } }, '🔍 Scan harder (missed some?)'));
+    return card;
+  }
+
+  const MARK_COLORS = { bad: '#ff1f2d', ok: '#2ea043', other: '#8b949e' };
+  function drawQuad(ctx, p, scale, kind, width) {
+    if (!p) return;
+    ctx.strokeStyle = MARK_COLORS[kind];
+    ctx.lineWidth = kind === 'bad' ? width * 2 : width;
+    ctx.beginPath();
+    ctx.moveTo(p.topLeft.x * scale, p.topLeft.y * scale);
+    ctx.lineTo(p.topRight.x * scale, p.topRight.y * scale);
+    ctx.lineTo(p.bottomRight.x * scale, p.bottomRight.y * scale);
+    ctx.lineTo(p.bottomLeft.x * scale, p.bottomLeft.y * scale);
+    ctx.closePath();
+    ctx.stroke();
+  }
+
+  // ---------- Live camera scan ----------
+  // Reads QR codes from the camera continuously and shows the result for each part right away.
+  const live = { stream: null, timer: null, busy: false, last: '', lastAt: 0, count: 0, bad: 0 };
+
+  $('live-btn').addEventListener('click', startLive);
+  $('live-done').addEventListener('click', stopLive);
+
+  async function startLive() {
+    if (!barcodeReaderLoaded()) { toast('Scanner did not load. Connect to the internet and reload.'); return; }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { toast('This browser cannot open the camera. Use "Photo" instead.'); return; }
+    try {
+      live.stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      });
+    } catch (err) {
+      toast('Camera not available: ' + (err && err.message ? err.message : err) + '. Allow camera access and try again.');
+      return;
+    }
+    live.last = '';
+    live.count = 0;
+    live.bad = 0;
+    $('live-po').textContent = currentPo || 'none picked';
+    liveResult(null);
+    liveCount();
+    $('live').hidden = false;
+    document.body.style.overflow = 'hidden';
+    const video = $('live-video');
+    video.srcObject = live.stream;
+    await video.play().catch(() => {});
+    live.timer = setInterval(liveTick, 200);
+  }
+
+  function stopLive() {
+    clearInterval(live.timer);
+    live.timer = null;
+    if (live.stream) live.stream.getTracks().forEach((t) => t.stop());
+    live.stream = null;
+    $('live-video').srcObject = null;
+    $('live').hidden = true;
+    document.body.style.overflow = '';
+    if (live.count) toast('Scanned ' + live.count + ' part' + (live.count === 1 ? '' : 's') + ', ' + live.bad + ' bad.');
+  }
+
+  function liveResult(r) {
+    const box = $('live-result');
+    if (!r) {
+      box.className = 'live-result';
+      box.textContent = 'Point the camera at a part\'s QR code.';
+      return;
+    }
+    box.className = 'live-result ' + (r.bad ? 'bad' : 'ok');
+    box.replaceChildren(
+      el('div', { class: 'live-title' }, r.bad ? '🚩 BAD PART' : '✓ Not a problematic part'),
+      el('div', { class: 'live-code' }, r.code + (r.bad ? ' · PO ' + r.bad.po : '') + (r.isNew ? '' : ' · already scanned')));
+  }
+
+  function liveCount() {
+    $('live-count').textContent = live.count + ' part' + (live.count === 1 ? '' : 's') + ' scanned now · ' + live.bad + ' bad';
+  }
+
+  const frame = document.createElement('canvas');
+  async function liveTick() {
+    const video = $('live-video');
+    if (live.busy || !video.videoWidth) return;
+    live.busy = true;
+    try {
+      frame.width = video.videoWidth;
+      frame.height = video.videoHeight;
+      const ctx = frame.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(video, 0, 0);
+      const codes = await readBarcodes(ctx.getImageData(0, 0, frame.width, frame.height), { maxNumberOfSymbols: 10 });
+      if (live.timer) handleLiveCodes(codes);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      live.busy = false;
+    }
+  }
+
+  function handleLiveCodes(codes) {
+    const c = $('live-overlay');
+    const video = $('live-video');
+    c.width = video.videoWidth;
+    c.height = video.videoHeight;
+    c.style.width = video.clientWidth + 'px';
+    c.style.height = video.clientHeight + 'px';
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, c.width, c.height);
+
+    let show = null;
+    codes.forEach((code) => {
+      const part = Parts.readPartCode(code.text);
+      const bad = part && Parts.findBad(part.code);
+      drawQuad(ctx, code.position, 1, part ? (bad ? 'bad' : 'ok') : 'other', Math.max(3, c.width / 200));
+      if (!part) return;
+      // The same part in view frame after frame is only counted and announced once.
+      const now = Date.now();
+      if (part.code === live.last && now - live.lastAt < 3000) { live.lastAt = now; return; }
+      live.last = part.code;
+      live.lastAt = now;
+      const r = checkPart(code.text);
+      if (r.isNew) { live.count++; if (r.bad) live.bad++; }
+      if (r.bad) alarm(); else beep(880);
+      if (!show || r.bad) show = r;
+    });
+    if (show) { liveResult(show); liveCount(); }
+  }
+
+  // ---------- Excel / history ----------
+  $('export-btn').addEventListener('click', () => {
+    if (typeof XLSX === 'undefined') { toast('Excel library did not load. Connect to the internet and reload.'); return; }
+    const rows = scans.map((s) => ({ 'PO': s.po, 'GA/NA code': s.code, 'result': s.result }));
+    const found = new Set(scans.filter((s) => s.result === BAD).map((s) => s.code));
+    const list = Parts.BAD_PARTS.map((p) => ({
+      'Serial number': p.code, 'DMG Order': p.dmgOrder, 'PO MAD': p.poMad, 'Found': found.has(p.code) ? 'Yes' : 'No',
+    }));
+    const wb = XLSX.utils.book_new();
+    const s1 = XLSX.utils.json_to_sheet(rows, { header: ['PO', 'GA/NA code', 'result'] });
+    s1['!cols'] = [{ wch: 10 }, { wch: 14 }, { wch: 16 }];
+    const s2 = XLSX.utils.json_to_sheet(list, { header: ['Serial number', 'DMG Order', 'PO MAD', 'Found'] });
+    s2['!cols'] = [{ wch: 14 }, { wch: 11 }, { wch: 18 }, { wch: 7 }];
+    XLSX.utils.book_append_sheet(wb, s1, 'Scanned parts');
+    XLSX.utils.book_append_sheet(wb, s2, 'Bad parts list');
+    XLSX.writeFile(wb, 'bad-part-scans-' + new Date().toISOString().slice(0, 10) + '.xlsx');
+  });
+
+  $('filter-input').addEventListener('input', renderEntries);
+
+  function renderEntries() {
+    const q = $('filter-input').value.trim().toUpperCase();
+    const list = scans.map((s, i) => ({ s, i }))
+      .filter(({ s }) => !q || (s.po + ' ' + s.code + ' ' + s.result).toUpperCase().includes(q))
+      .reverse();
+    const box = $('entries');
+    box.replaceChildren();
+    if (!list.length) {
+      box.append(el('p', { class: 'muted' }, scans.length ? 'No matches.' : 'No parts scanned yet.'));
+      return;
+    }
+    list.slice(0, 500).forEach(({ s, i }) => box.append(entryRow(s, () => {
+      if (!confirm('Delete scan of ' + s.code + '?')) return;
+      scans.splice(i, 1);
+      persist();
+      renderEntries();
+    })));
+  }
+
+  $('clear-all').addEventListener('click', () => {
+    if (!scans.length) return;
+    if (!confirm('Delete ALL ' + scans.length + ' scans from this phone? Export to Excel first if you want to keep them.')) return;
+    scans = [];
+    persist();
+    renderEntries();
+    $('results').replaceChildren();
+  });
+
   // ---------- Barcode reader ----------
-  const BARCODE_OPTIONS = { formats: ['AllLinear', 'QRCode', 'DataMatrix'], tryHarder: true, maxNumberOfSymbols: 60 };
+  const BARCODE_OPTIONS = { formats: ['QRCode', 'MicroQRCode', 'DataMatrix', 'AllLinear'], tryHarder: true, maxNumberOfSymbols: 60 };
   let zxingReady = false;
 
   function barcodeReaderLoaded() {
@@ -174,88 +495,6 @@
     return results.filter((r) => r.isValid !== false && r.text);
   }
 
-  async function onFiles(e) {
-    const files = [...e.target.files];
-    e.target.value = '';
-    if (!files.length) return;
-    if (typeof ZXingWASM === 'undefined' && typeof Tesseract === 'undefined') {
-      toast('Scanner did not load. Connect to the internet and reload.');
-      return;
-    }
-    try {
-      for (let i = 0; i < files.length; i++) {
-        status('Photo ' + (i + 1) + ' of ' + files.length + ': preparing…');
-        await scanFile(files[i], i + 1, files.length);
-      }
-      status('');
-    } catch (err) {
-      console.error(err);
-      status('Something went wrong: ' + (err && err.message ? err.message : err));
-    }
-  }
-
-  // opts.deep: also zoom into sections of the photo. opts.card: preview card to replace (re-scan).
-  async function scanFile(file, n, total, opts) {
-    opts = opts || {};
-    const canvas = await prepareImage(file);
-    const label = 'Photo ' + n + ' of ' + total + ': ';
-    const fallback = $('fallback-aisle').value;
-
-    // 1. Barcodes: every barcode in the photo, fast and exact. If no job or no shelf barcode turns
-    // up, zoom into sections of the photo in case the barcodes are just small.
-    status(label + 'reading barcodes…');
-    let codes = [];
-    const progress = (msg) => status(label + msg);
-    try {
-      codes = await readAllBarcodes(canvas, progress, { whole: true, zoom: !!opts.deep });
-      const first = Parser.barcodeTokens(codes);
-      if (!opts.deep && (!first.jobs.length || !first.aisles.length)) {
-        codes = await readAllBarcodes(canvas, progress, { zoom: true }, codes);
-      }
-    } catch (err) {
-      console.error(err);
-    }
-    const bc = Parser.barcodeTokens(codes);
-    let aisles = bc.aisles;
-    let jobs = bc.jobs;
-
-    // 2. Printed text: only if barcodes missed the jobs or the shelf, or the user asked for it.
-    if ((!jobs.length || !aisles.length || $('also-text').checked) && typeof Tesseract !== 'undefined') {
-      const w = await getWorker();
-      status(label + 'reading printed text…');
-      // Auto layout first. If job numbers or the shelf number are still missing, read again treating
-      // the photo as scattered labels (better for a lone "B12-E"), and combine what both reads found.
-      // The text reader gets a smaller copy (faster); its positions are scaled back up afterwards.
-      const small = shrink(canvas, 2400);
-      const k = canvas.width / small.width;
-      await w.setParameters({ tessedit_pageseg_mode: '3' });
-      let lines = (await w.recognize(small)).data.lines || [];
-      let t = Parser.findTokens(lines);
-      if (!(jobs.length || t.jobs.length) || !(aisles.length || t.aisles.length)) {
-        status(label + 'looking for missed labels…');
-        await w.setParameters({ tessedit_pageseg_mode: '11' });
-        lines = lines.concat((await w.recognize(small)).data.lines || []);
-        t = Parser.findTokens(lines);
-      }
-      const up = (tok) => Object.assign({}, tok, { bbox: { x0: tok.bbox.x0 * k, y0: tok.bbox.y0 * k, x1: tok.bbox.x1 * k, y1: tok.bbox.y1 * k } });
-      t = { jobs: t.jobs.map(up), aisles: t.aisles.map(up) };
-      // Keep barcode readings; add text readings only for jobs/shelves the barcodes didn't find.
-      const jobSet = new Set(jobs.map((j) => j.job));
-      const aisleSet = new Set(aisles.map((a) => a.aisle));
-      jobs = jobs.concat(t.jobs.filter((j) => !jobSet.has(j.job)));
-      aisles = aisles.concat(t.aisles.filter((a) => !aisleSet.has(a.aisle)));
-    }
-    const result = Object.assign(Parser.pairUp(aisles, jobs, fallback), { other: bc.other, barcodes: codes.length });
-    drawPreview(canvas, result, file, opts.card);
-    const inReview = new Set(review.map((r) => Parser.normalizeJob(r.job) + '|' + Parser.normalizeAisle(r.aisle)));
-    result.pairs.forEach((p) => {
-      if (inReview.has(p.job + '|' + p.aisle)) return;
-      review.push({ job: p.job, aisle: p.aisle, on: !p.unclear && !p.farShelf, guessed: p.guessed, unclear: p.unclear, farShelf: p.farShelf });
-    });
-    review.sort((x, y) => String(x.aisle).localeCompare(String(y.aisle), undefined, { numeric: true }) || String(x.job).localeCompare(String(y.job)));
-    if (!result.pairs.length) toast('No job numbers found in photo ' + n + '. Try "Scan harder", or a closer, sharper photo.');
-    renderReview();
-  }
 
   // Read every barcode in a photo. How well barcodes read depends on their size in pixels, so the whole
   // photo is read at several sizes and the results merged. With deep = true it also zooms into
@@ -295,7 +534,7 @@
     const sizes = [1400, 2000, 2800, long].filter((v, i, a) => v <= long && a.indexOf(v) === i);
     if (passes.whole) {
       for (const size of sizes) {
-        progress('reading barcodes… (' + found.length + ' found)');
+        progress('reading QR codes… (' + found.length + ' found)');
         await readRegion(0, 0, W, H, size, 1);
       }
     }
@@ -306,7 +545,7 @@
       const th = Math.min(H, Math.ceil((H / n) * 1.4));
       for (let row = 0; row < n; row++) {
         for (let col = 0; col < n; col++) {
-          progress('zooming in for small barcodes… (' + found.length + ' found)');
+          progress('zooming in for small QR codes… (' + found.length + ' found)');
           const x = Math.max(0, Math.min(W - tw, Math.round(((col + 0.5) * W) / n - tw / 2)));
           const y = Math.max(0, Math.min(H - th, Math.round(((row + 0.5) * H) / n - th / 2)));
           await readRegion(x, y, tw, th, 3200, 3);
@@ -314,16 +553,6 @@
       }
     }
     return found;
-  }
-
-  function shrink(src, max) {
-    const scale = Math.min(1, max / Math.max(src.width, src.height));
-    if (scale === 1) return src;
-    const c = document.createElement('canvas');
-    c.width = Math.round(src.width * scale);
-    c.height = Math.round(src.height * scale);
-    c.getContext('2d').drawImage(src, 0, 0, c.width, c.height);
-    return c;
   }
 
   // Keep full detail for small barcodes (up to 4096 px) and boost contrast.
@@ -365,369 +594,10 @@
     });
   }
 
-  // Show the photo with found aisles (blue) and jobs (green) boxed, and a line joining each pair.
-  function drawPreview(src, result, file, oldCard) {
-    const name = file.name || 'photo';
-    const c = document.createElement('canvas');
-    const scale = Math.min(1, 1200 / src.width);
-    c.width = Math.round(src.width * scale);
-    c.height = Math.round(src.height * scale);
-    const ctx = c.getContext('2d');
-    ctx.drawImage(src, 0, 0, c.width, c.height);
-    const aisleColor = '#1f6feb';
-    const jobColor = '#1a7f37';
-    ctx.lineWidth = Math.max(2, c.width / 300);
-    const box = (b, color) => {
-      ctx.strokeStyle = color;
-      ctx.strokeRect(b.x0 * scale, b.y0 * scale, (b.x1 - b.x0) * scale, (b.y1 - b.y0) * scale);
-    };
-    result.aisles.forEach((a) => box(a.bbox, aisleColor));
-    result.pairs.forEach((p) => {
-      box(p.jobBox, jobColor);
-      if (p.aisleBox) {
-        ctx.strokeStyle = 'rgba(255,140,0,.9)';
-        ctx.beginPath();
-        ctx.moveTo(((p.aisleBox.x0 + p.aisleBox.x1) / 2) * scale, p.aisleBox.y1 * scale);
-        ctx.lineTo(((p.jobBox.x0 + p.jobBox.x1) / 2) * scale, p.jobBox.y0 * scale);
-        ctx.stroke();
-      }
-    });
-    let cap = result.aisles.length + ' shelf label(s), ' + result.pairs.length + ' job(s) found (' +
-      (result.barcodes || 0) + ' barcode' + (result.barcodes === 1 ? '' : 's') + ' read) — ' + name;
-    if (result.other && result.other.length) cap += '. Other barcodes ignored: ' + result.other.slice(0, 6).join(', ');
-    const card = el('div', { class: 'preview' }, c, el('div', { class: 'cap' }, cap));
-    // Re-scan this photo zoomed in, for barcodes the quick read missed.
-    card.append(el('button', { type: 'button', class: 'harder', onclick: async (e) => {
-      e.target.disabled = true;
-      try {
-        await scanFile(file, 1, 1, { deep: true, card });
-      } finally {
-        status('');
-      }
-    } }, '🔍 Scan harder (missed some?)'));
-    if (oldCard && oldCard.parentNode) oldCard.replaceWith(card);
-    else $('previews').prepend(card);
-  }
-
-  function renderReview() {
-    const body = $('review-body');
-    body.replaceChildren();
-    review.forEach((r, i) => {
-      const validAisle = Parser.isValidAisle(Parser.normalizeAisle(r.aisle));
-      const validJob = Parser.isValidJob(Parser.normalizeJob(r.job));
-      const aisleInput = el('input', {
-        type: 'text', value: r.aisle, placeholder: 'B12-E', autocapitalize: 'characters',
-        class: validAisle ? '' : 'invalid',
-        oninput: (e) => { r.aisle = e.target.value; },
-        // Correcting the shelf of a "check shelf" row means it has been checked.
-        onchange: () => { if (r.farShelf || r.guessed) { r.farShelf = false; r.guessed = false; r.on = true; } renderReview(); },
-      });
-      const jobInput = el('input', {
-        type: 'text', value: r.job, inputmode: 'numeric', placeholder: '12345678',
-        class: validJob ? '' : 'invalid',
-        oninput: (e) => { r.job = e.target.value; },
-        onchange: renderReview,
-      });
-      body.append(el('tr', { class: (r.on ? '' : 'off ') + (validAisle && validJob ? '' : 'bad') },
-        el('td', {}, el('input', { type: 'checkbox', checked: r.on, onchange: (e) => { r.on = e.target.checked; renderReview(); } })),
-        el('td', {}, aisleInput, r.guessed ? el('span', { class: 'flag' }, 'no shelf label found')
-          : r.farShelf ? el('span', { class: 'flag' }, 'check shelf – its label may be missed') : null),
-        el('td', {}, jobInput, r.unclear ? el('span', { class: 'flag' }, 'unclear – scratched?') : null),
-        el('td', {}, el('button', { type: 'button', class: 'x', 'aria-label': 'Remove row', onclick: () => { review.splice(i, 1); renderReview(); } }, '✕'))));
-    });
-    $('review').hidden = review.length === 0;
-    const n = review.filter((r) => r.on).length;
-    $('save-review').textContent = 'Save ' + n + ' entr' + (n === 1 ? 'y' : 'ies');
-    $('save-review').disabled = n === 0;
-  }
-
-  // ---------- Live barcode scan ----------
-  // Reads barcodes from the camera continuously. A shelf barcode sets the current shelf; each new job
-  // barcode is added under it. If a shelf and jobs are in view together, each job goes to the shelf above it.
-  const live = { stream: null, timer: null, busy: false, shelf: '', seen: new Set(), recent: new Map(), added: 0 };
-
-  $('live-btn').addEventListener('click', startLive);
-  $('live-done').addEventListener('click', stopLive);
-
-  async function startLive() {
-    if (!barcodeReaderLoaded()) { toast('Barcode reader did not load. Connect to the internet and reload.'); return; }
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { toast('This browser cannot open the camera. Use "Take photo" instead.'); return; }
-    try {
-      live.stream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-      });
-    } catch (err) {
-      toast('Camera not available: ' + (err && err.message ? err.message : err) + '. Allow camera access and try again.');
-      return;
-    }
-    live.shelf = Parser.normalizeAisle($('fallback-aisle').value) || '';
-    live.seen = new Set(review.map((r) => r.job + '|' + Parser.normalizeAisle(r.aisle)));
-    live.recent = new Map();
-    live.added = 0;
-    $('live-list').replaceChildren();
-    showShelf();
-    liveMsg('Point the camera at a shelf barcode, then at the job barcodes on that shelf.');
-    $('live').hidden = false;
-    document.body.style.overflow = 'hidden';
-    const video = $('live-video');
-    video.srcObject = live.stream;
-    await video.play().catch(() => {});
-    live.timer = setInterval(liveTick, 200);
-  }
-
-  function stopLive() {
-    clearInterval(live.timer);
-    live.timer = null;
-    if (live.stream) live.stream.getTracks().forEach((t) => t.stop());
-    live.stream = null;
-    $('live-video').srcObject = null;
-    $('live').hidden = true;
-    document.body.style.overflow = '';
-    renderReview();
-    if (live.added) {
-      toast('Scanned ' + live.added + ' job' + (live.added === 1 ? '' : 's') + '. Check them, then tap Save.');
-      $('review').scrollIntoView({ behavior: 'smooth' });
-    }
-  }
-
-  function showShelf() {
-    $('live-shelf').textContent = live.shelf || 'none yet';
-  }
-
-  function liveMsg(text, kind) {
-    const m = $('live-msg');
-    m.textContent = text;
-    m.className = 'live-msg' + (kind ? ' ' + kind : '');
-  }
-
-  const frame = document.createElement('canvas');
-  async function liveTick() {
-    const video = $('live-video');
-    if (live.busy || !video.videoWidth) return;
-    live.busy = true;
-    try {
-      frame.width = video.videoWidth;
-      frame.height = video.videoHeight;
-      const ctx = frame.getContext('2d', { willReadFrequently: true });
-      ctx.drawImage(video, 0, 0);
-      const codes = await readBarcodes(ctx.getImageData(0, 0, frame.width, frame.height), { maxNumberOfSymbols: 20 });
-      if (live.timer) handleLiveCodes(codes);
-      drawLiveBoxes(codes);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      live.busy = false;
-    }
-  }
-
-  function handleLiveCodes(codes) {
-    if (!codes.length) return;
-    const t = Parser.barcodeTokens(codes);
-    if (t.aisles.length) {
-      // With several shelf labels in view, the top-most one becomes the current shelf.
-      const top = t.aisles.slice().sort((a, b) => a.bbox.y0 - b.bbox.y0)[0];
-      if (top.aisle !== live.shelf) {
-        live.shelf = top.aisle;
-        showShelf();
-        beep(660);
-        liveMsg('Shelf ' + live.shelf + '. Now scan the job barcodes.', 'ok');
-      }
-    }
-    if (!t.jobs.length) return;
-    const pairs = t.aisles.length ? Parser.pairUp(t.aisles, t.jobs, live.shelf).pairs
-      : t.jobs.map((j) => ({ job: j.job, aisle: live.shelf }));
-    const fresh = [];
-    pairs.forEach((p) => {
-      if (!p.aisle) return;
-      const k = p.job + '|' + p.aisle;
-      if (live.seen.has(k)) return;
-      // A job just scanned under another shelf is probably still in view while moving to the next
-      // shelf; don't file it under the new shelf too.
-      const last = live.recent.get(p.job);
-      if (last && last.aisle !== p.aisle && Date.now() - last.at < 4000) return;
-      live.recent.set(p.job, { aisle: p.aisle, at: Date.now() });
-      live.seen.add(k);
-      review.push({ job: p.job, aisle: p.aisle, on: true });
-      live.added++;
-      fresh.push(p);
-      $('live-list').prepend(el('div', {}, 'JOB ' + p.job + ' → ', el('b', {}, p.aisle)));
-    });
-    if (!live.shelf && !t.aisles.length) {
-      liveMsg('Scan the shelf barcode first (or type the shelf before starting).', 'warn');
-    } else if (fresh.length) {
-      beep(880);
-      liveMsg('Added ' + fresh.map((p) => p.job).join(', ') + ' → ' + fresh[0].aisle + '  (' + live.added + ' this scan)', 'ok');
-    }
-  }
-
-  function drawLiveBoxes(codes) {
-    const video = $('live-video');
-    const c = $('live-overlay');
-    // Match the overlay to how the video is shown on screen.
-    c.width = video.videoWidth;
-    c.height = video.videoHeight;
-    c.style.width = video.clientWidth + 'px';
-    c.style.height = video.clientHeight + 'px';
-    const ctx = c.getContext('2d');
-    ctx.clearRect(0, 0, c.width, c.height);
-    ctx.lineWidth = Math.max(3, c.width / 200);
-    codes.forEach((r) => {
-      const p = r.position;
-      if (!p) return;
-      const kind = Parser.classifyCode(r.text);
-      ctx.strokeStyle = !kind ? '#8b949e' : kind.type === 'shelf' ? '#58a6ff' : '#3fb950';
-      ctx.beginPath();
-      ctx.moveTo(p.topLeft.x, p.topLeft.y);
-      ctx.lineTo(p.topRight.x, p.topRight.y);
-      ctx.lineTo(p.bottomRight.x, p.bottomRight.y);
-      ctx.lineTo(p.bottomLeft.x, p.bottomLeft.y);
-      ctx.closePath();
-      ctx.stroke();
-    });
-  }
-
-  let audio = null;
-  function beep(freq) {
-    try { if (navigator.vibrate) navigator.vibrate(60); } catch (e) { /* ignore */ }
-    try {
-      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
-      const o = audio.createOscillator();
-      const g = audio.createGain();
-      o.frequency.value = freq;
-      g.gain.value = 0.08;
-      o.connect(g);
-      g.connect(audio.destination);
-      o.start();
-      o.stop(audio.currentTime + 0.09);
-    } catch (e) { /* sound is optional */ }
-  }
-
-  $('add-row').addEventListener('click', () => {
-    const last = review[review.length - 1];
-    review.push({ job: '', aisle: last ? last.aisle : $('fallback-aisle').value, on: true });
-    renderReview();
-    const inputs = $('review-body').querySelectorAll('tr:last-child input[type=text]');
-    if (inputs[1]) inputs[1].focus();
-  });
-
-  $('clear-review').addEventListener('click', () => {
-    if (review.length && !confirm('Discard these results?')) return;
-    review = [];
-    $('previews').replaceChildren();
-    renderReview();
-  });
-
-  $('save-review').addEventListener('click', () => {
-    const chosen = review.filter((r) => r.on);
-    const bad = chosen.filter((r) => !Parser.isValidJob(Parser.normalizeJob(r.job)) || !Parser.normalizeAisle(r.aisle));
-    if (bad.length && !confirm(bad.length + ' row(s) do not look like a "B12-E" / "B12" shelf and an 8-digit job number. Save anyway?')) return;
-    const added = addEntries(chosen);
-    toast('Saved ' + added + ' new entr' + (added === 1 ? 'y' : 'ies') + (chosen.length - added ? ' (' + (chosen.length - added) + ' already saved)' : ''));
-    review = [];
-    $('previews').replaceChildren();
-    renderReview();
-  });
-
-  $('manual-form').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const aisle = Parser.normalizeAisle($('manual-aisle').value);
-    const job = Parser.normalizeJob($('manual-job').value);
-    if (!aisle || !job) { toast('Enter both an aisle and a job number'); return; }
-    const added = addEntries([{ job, aisle }]);
-    toast(added ? 'Added ' + job + ' → ' + aisle : 'Already saved');
-    $('manual-job').value = '';
-    $('manual-job').focus();
-  });
-
-  // ---------- 3. Excel / data ----------
-  $('export-btn').addEventListener('click', () => {
-    if (typeof XLSX === 'undefined') { toast('Excel library did not load. Connect to the internet and reload.'); return; }
-    const sorted = [...entries].sort((a, b) => a.job.localeCompare(b.job) || a.aisle.localeCompare(b.aisle));
-    const rows = sorted.map((e) => ({ 'Job Number': e.job, 'Aisle': e.aisle, 'Date Added': fmtDate(e.added) }));
-    const byJob = groupByJob(sorted);
-    const lookup = Object.keys(byJob).map((j) => {
-      const aisles = [...new Set(byJob[j].map((e) => e.aisle))];
-      return { 'Job Number': j, 'Aisles': aisles.join(', '), 'Aisle Count': aisles.length };
-    });
-    const wb = XLSX.utils.book_new();
-    const s1 = XLSX.utils.json_to_sheet(rows, { header: ['Job Number', 'Aisle', 'Date Added'] });
-    s1['!cols'] = [{ wch: 14 }, { wch: 10 }, { wch: 14 }];
-    const s2 = XLSX.utils.json_to_sheet(lookup, { header: ['Job Number', 'Aisles', 'Aisle Count'] });
-    s2['!cols'] = [{ wch: 14 }, { wch: 24 }, { wch: 12 }];
-    XLSX.utils.book_append_sheet(wb, s1, 'Jobs');
-    XLSX.utils.book_append_sheet(wb, s2, 'Lookup');
-    const stamp = new Date().toISOString().slice(0, 10);
-    XLSX.writeFile(wb, 'job-aisles-' + stamp + '.xlsx');
-  });
-
-  $('import-input').addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    e.target.value = '';
-    if (!file) return;
-    if (typeof XLSX === 'undefined') { toast('Excel library did not load. Connect to the internet and reload.'); return; }
-    try {
-      const wb = XLSX.read(await file.arrayBuffer());
-      const pairs = [];
-      // Read every sheet that has a "Job" column and an "Aisle" column.
-      wb.SheetNames.forEach((name) => {
-        const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '', raw: false });
-        rows.forEach((row) => {
-          const keys = Object.keys(row);
-          const jk = keys.find((k) => /job/i.test(k));
-          const ak = keys.find((k) => /aisle/i.test(k) && !/count/i.test(k));
-          if (!jk || !ak) return;
-          String(row[ak]).split(/[,;/]+/).map((s) => s.trim()).filter(Boolean)
-            .forEach((aisle) => pairs.push({ job: String(row[jk]), aisle }));
-        });
-      });
-      if (!pairs.length) { toast('No "Job Number" and "Aisle" columns found in that file'); return; }
-      const added = addEntries(pairs);
-      toast('Imported ' + added + ' new entr' + (added === 1 ? 'y' : 'ies'));
-      renderEntries();
-    } catch (err) {
-      toast('Could not read that file: ' + err.message);
-    }
-  });
-
-  $('filter-input').addEventListener('input', renderEntries);
-
-  function renderEntries() {
-    const q = $('filter-input').value.trim().toUpperCase();
-    const list = entries
-      .map((e, i) => ({ e, i }))
-      .filter(({ e }) => !q || e.job.includes(q) || e.aisle.includes(q))
-      .sort((a, b) => b.e.added.localeCompare(a.e.added));
-    const box = $('entries');
-    box.replaceChildren();
-    if (!list.length) {
-      box.append(el('p', { class: 'muted' }, entries.length ? 'No matches.' : 'No entries yet. Add aisle photos to get started.'));
-      return;
-    }
-    const shown = list.slice(0, 300);
-    shown.forEach(({ e, i }) => {
-      box.append(el('div', { class: 'entry' },
-        el('div', {}, el('b', {}, e.job), ' → ', el('span', { class: 'a' }, e.aisle), el('small', {}, fmtDate(e.added))),
-        el('button', { class: 'x', 'aria-label': 'Delete', onclick: () => {
-          if (!confirm('Delete ' + e.job + ' in ' + e.aisle + '?')) return;
-          entries.splice(i, 1);
-          persist();
-          renderEntries();
-        } }, '🗑')));
-    });
-    if (list.length > shown.length) box.append(el('p', { class: 'muted' }, 'Showing ' + shown.length + ' of ' + list.length + '. Use the filter to narrow down.'));
-  }
-
-  $('clear-all').addEventListener('click', () => {
-    if (!entries.length) return;
-    if (!confirm('Delete ALL ' + entries.length + ' entries from this phone? Export to Excel first if you want a backup.')) return;
-    entries = [];
-    persist();
-    renderEntries();
-  });
-
   // ---------- Start ----------
   updateCount();
+  renderPos();
+  renderRecent();
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
