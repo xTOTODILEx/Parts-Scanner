@@ -318,8 +318,9 @@
   }
 
   // ---------- Live camera scan ----------
-  // Reads QR codes from the camera continuously and shows the result for each part right away.
-  const live = { stream: null, timer: null, busy: false, last: '', lastAt: 0, count: 0, bad: 0 };
+  // Reads QR codes from the camera. As soon as a part's QR code is read, the camera closes and the
+  // result is shown on the main screen.
+  const live = { stream: null, timer: null, busy: false };
 
   $('live-btn').addEventListener('click', startLive);
   $('live-done').addEventListener('click', stopLive);
@@ -336,12 +337,8 @@
       toast('Camera not available: ' + (err && err.message ? err.message : err) + '. Allow camera access and try again.');
       return;
     }
-    live.last = '';
-    live.count = 0;
-    live.bad = 0;
     $('live-po').textContent = currentPo || 'none picked';
-    liveResult(null);
-    liveCount();
+    liveMsg('Point the camera at a part\'s QR code.');
     $('live').hidden = false;
     document.body.style.overflow = 'hidden';
     const video = $('live-video');
@@ -358,24 +355,10 @@
     $('live-video').srcObject = null;
     $('live').hidden = true;
     document.body.style.overflow = '';
-    if (live.count) toast('Scanned ' + live.count + ' part' + (live.count === 1 ? '' : 's') + ', ' + live.bad + ' bad.');
   }
 
-  function liveResult(r) {
-    const box = $('live-result');
-    if (!r) {
-      box.className = 'live-result';
-      box.textContent = 'Point the camera at a part\'s QR code.';
-      return;
-    }
-    box.className = 'live-result ' + (r.bad ? 'bad' : 'ok');
-    box.replaceChildren(
-      el('div', { class: 'live-title' }, r.bad ? '🚩 BAD PART' : '✓ Not a problematic part'),
-      el('div', { class: 'live-code' }, r.code + (r.bad ? ' · PO ' + r.bad.po : '') + (r.isNew ? '' : ' · already scanned')));
-  }
-
-  function liveCount() {
-    $('live-count').textContent = live.count + ' part' + (live.count === 1 ? '' : 's') + ' scanned now · ' + live.bad + ' bad';
+  function liveMsg(text) {
+    $('live-msg').textContent = text;
   }
 
   const frame = document.createElement('canvas');
@@ -398,32 +381,30 @@
   }
 
   function handleLiveCodes(codes) {
-    const c = $('live-overlay');
-    const video = $('live-video');
-    c.width = video.videoWidth;
-    c.height = video.videoHeight;
-    c.style.width = video.clientWidth + 'px';
-    c.style.height = video.clientHeight + 'px';
-    const ctx = c.getContext('2d');
-    ctx.clearRect(0, 0, c.width, c.height);
-
-    let show = null;
-    codes.forEach((code) => {
-      const part = Parts.readPartCode(code.text);
-      const bad = part && Parts.findBad(part.code);
-      drawQuad(ctx, code.position, 1, part ? (bad ? 'bad' : 'ok') : 'other', Math.max(3, c.width / 200));
-      if (!part) return;
-      // The same part in view frame after frame is only counted and announced once.
-      const now = Date.now();
-      if (part.code === live.last && now - live.lastAt < 3000) { live.lastAt = now; return; }
-      live.last = part.code;
-      live.lastAt = now;
+    const parts = codes.filter((code) => Parts.readPartCode(code.text));
+    if (!parts.length) {
+      // Show other QR codes in grey so it is clear they were seen but are not part labels.
+      const c = $('live-overlay');
+      const video = $('live-video');
+      c.width = video.videoWidth;
+      c.height = video.videoHeight;
+      c.style.width = video.clientWidth + 'px';
+      c.style.height = video.clientHeight + 'px';
+      const ctx = c.getContext('2d');
+      ctx.clearRect(0, 0, c.width, c.height);
+      codes.forEach((code) => drawQuad(ctx, code.position, 1, 'other', Math.max(3, c.width / 200)));
+      if (codes.length) liveMsg('That code isn\'t a part QR code. Point at the part\'s QR label.');
+      return;
+    }
+    // A part was read: close the camera and show the result (every part in view, if several).
+    stopLive();
+    const results = [];
+    parts.forEach((code) => {
       const r = checkPart(code.text);
-      if (r.isNew) { live.count++; if (r.bad) live.bad++; }
-      if (r.bad) alarm(); else beep(880);
-      if (!show || r.bad) show = r;
+      if (!results.some((x) => x.code === r.code)) results.push(r);
     });
-    if (show) { liveResult(show); liveCount(); }
+    if (results.some((r) => r.bad)) alarm(); else beep(880);
+    showResults(results);
   }
 
   // ---------- Excel / history ----------

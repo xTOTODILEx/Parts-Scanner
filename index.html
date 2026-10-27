@@ -58,16 +58,15 @@
 
       <!-- Live camera scanning -->
       <div id="live" class="live" hidden>
-        <div class="live-head">
-          <div>PO: <b id="live-po">none</b></div>
-          <button id="live-done" type="button" class="primary">Done</button>
-        </div>
+        <div class="live-head">PO: <b id="live-po">none</b></div>
         <div class="live-view">
           <video id="live-video" playsinline muted autoplay></video>
           <canvas id="live-overlay"></canvas>
         </div>
-        <div id="live-result" class="live-result">Point the camera at a part's QR code.</div>
-        <div id="live-count" class="live-count"></div>
+        <div class="live-foot">
+          <div id="live-msg" class="live-msg">Point the camera at a part's QR code.</div>
+          <button id="live-done" type="button" class="primary live-close">Close</button>
+        </div>
       </div>
     </section>
 
