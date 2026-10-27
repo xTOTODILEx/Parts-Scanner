@@ -1,54 +1,61 @@
-# Parts Scanner
+# Bad Part Finder
 
-A phone app for finding which aisle a job is in.
+A phone app for finding the troublesome parts. Scan a part's QR code and the app tells you straight away if it's one of the bad serial numbers.
 
-- **📷 Add photos**: take **one photo** of the boxes and the app reads **every barcode in it at once**.
-  - Each job barcode is matched to the shelf barcode (like `B12-D`) above it. If a job's own shelf barcode couldn't be read, it shows up **unticked** with "check shelf" so it isn't filed under the wrong shelf; fix the shelf and it ticks itself.
-  - If the photo has no readable job or shelf barcode, the app zooms into parts of the photo automatically. Missed some? Tap **🔍 Scan harder** under the photo to zoom in on it again.
-  - If barcodes still can't be read, the printed text (`JOB: 12345678`, `B12-E`) is used. Tick **Also read printed text** to always do both.
-  - **Live scan (one barcode at a time)** is still there: point at a shelf barcode, then at the job barcodes on that shelf.
-  - Shelf numbers always start with **B** (`B12-E` or `B12`); other barcodes are ignored and listed under the photo. Scratched or unclear printed labels show up **unticked**. You check and fix the results, then save them.
-- **🔍 Find**: type a job number to see its aisle. If a job is in more than one aisle, every aisle is shown.
-- **📊 Excel**: export the database as an `.xlsx` file, or import one (columns `Job Number` and `Aisle`). The export has two sheets:
-  - **Jobs**: one row per job and aisle
-  - **Lookup**: one row per job, with all of its aisles and how many there are
+## How to use it
 
-It runs in the phone's web browser and can be added to the home screen like a normal app. Nothing needs to be installed from an app store.
+1. **Front page:** the 4 POs that contain bad parts are listed: **166690**, **167742**, **161945** and **167923**. Use them to spot the boxes. Each PO shows how many bad parts it has, how many you've found, and (under *Bad serial numbers*) the list of serials.
+2. **Tap the PO** of the box you are checking. Every part you scan is saved under that PO.
+3. Scan the parts:
+   - **▦ Scan part QR codes:** point the camera at a part's QR code (for example `https://mydmg.dmg.it/it/qr/?mat=16080625$$GA2604429`). The app reads the GA/NA code after `$$` and shows
+     - **🚩 BAD PART** (red, with a buzz and alarm sound) if it is one of the bad serials, or
+     - **✓ Not a problematic part** (green, short beep) if not.
+   - **📷 Photo of many parts:** take one photo of several labels. Every QR code in it is checked, and bad parts get a red box on the photo. Tap **Scan harder** if some were missed.
+   - **Type a serial** if a QR code can't be read.
+4. **📊 Excel:** **Export to Excel** downloads the scans with the columns **PO**, **GA/NA code** and **result**. A second sheet lists all bad serials and whether each one has been found.
+
+Each part is saved once; scanning it again shows its result with "already scanned".
+
+## The bad serial numbers
+
+| Serial number | DMG Order | PO MAD |
+| --- | --- | --- |
+| GA260844J | 1236-2026 | FCSTPO166690 |
+| GA260846J | 1236-2026 | FCSTPO166690 |
+| GA260846L | 1397-2026 | FCSTPO167742 |
+| GA260846M | 1236-2026 | FCSTPO166690 |
+| GA260847X | 1236-2026 | FCSTPO166690 |
+| GA260848E | 1236-2026 | FCSTPO166690 |
+| GA260848J | 1236-2026 | FCSTPO166690 |
+| GA260849J | 3654-2026 | 161945_AUGUST |
+| GA260849R | 3656-2026 | 161945_SEPTEMBER |
+| GA260850M | 3654-2026 | 161945_AUGUST |
+| GA261276Z | 1443-2026 | FCSTPO167923 |
+| GA261277A | 1443-2026 | FCSTPO167923 |
+| GA261277G | 1443-2026 | FCSTPO167923 |
+
+To change the list, edit the rows at the top of `parts.js` (on github.com: open the file, tap the pencil, edit, then **Commit changes**). The POs on the front page are worked out from this list.
 
 ## Where the data is stored
 
-Saved entries stay **on the phone that saved them** (in the browser's storage). Nothing is uploaded anywhere.
-- Use **Export to Excel** often as a backup, or to send the data to someone else.
-- To move the data to another phone, export it on the first phone and **Import Excel** on the other one.
-- Clearing the browser's site data deletes the saved entries, so export first.
+Scans stay **on the phone that made them** (in the browser's storage). Export to Excel to keep or share them. Clearing the browser's site data deletes the scans.
 
-## Putting it on your phone (no computer or git needed)
+## Opening the app
 
-1. On github.com, merge this branch into `main` (open the pull request and tap **Merge**).
-2. GitHub Pages only works on **public** repos on a free account. In the repo, go to **Settings → General → Danger Zone → Change visibility → Public**. Your job data is not in the repo, only the app's code is.
-3. Go to **Settings → Pages**. Under *Build and deployment* choose **Deploy from a branch**, branch **main**, folder **/ (root)**, then **Save**.
-4. After a minute or two the app is live at `https://xtotodilex.github.io/Parts-Scanner/`.
-5. Open that link on your phone:
-   - **Android (Chrome)**: menu ⋮ → **Add to Home screen** / **Install app**
-   - **iPhone (Safari)**: Share → **Add to Home Screen**
+https://xtotodilex.github.io/Parts-Scanner/
 
-The first scan needs internet so the app can download its barcode and text readers (about 12 MB). After that it also works offline.
+Open it in Chrome (Android) or Safari (iPhone) and add it to the home screen:
+- **Android (Chrome):** menu ⋮ → **Add to Home screen** / **Install app**
+- **iPhone (Safari):** Share → **Add to Home Screen**
 
-## Tips for good scans
-
-- Fit all the labels in the photo but get as close as you can. Hold still so the photo is sharp; blurry or very small barcodes can't be read even with **Scan harder**.
-
-- Hold the phone straight on to the labels, fill the screen with them, and avoid glare.
-- One or two boxes per photo works better than a whole shelf.
-- If the shelf number isn't in the photo, type it in **Shelf for these photos** before scanning.
-- Always check the green job boxes and blue shelf boxes on the preview before saving.
+The first scan needs internet to download the QR reader. After that it also works offline.
 
 ## Files
 
 | File | What it does |
 | --- | --- |
 | `index.html`, `style.css` | The screens |
-| `app.js` | Live camera barcode scanning and photo handling (zxing-wasm), text reading (Tesseract.js), storage, search, Excel import/export (SheetJS) |
-| `parser.js` | Works out which barcodes / text are job numbers and B shelf numbers, and matches each job to the shelf above it |
+| `parts.js` | The bad serial list, and reading the GA/NA code from a QR code |
+| `app.js` | Camera and photo QR scanning (zxing-wasm), results, storage, Excel export (SheetJS) |
 | `sw.js`, `manifest.webmanifest`, `icons/` | Home-screen install and offline support |
-| `tests/parser.test.js` | Tests for `parser.js`: `node tests/parser.test.js` |
+| `tests/parts.test.js` | Tests for `parts.js`: `node tests/parts.test.js` |

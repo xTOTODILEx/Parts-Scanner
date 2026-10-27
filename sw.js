@@ -1,6 +1,6 @@
 // Lets the app open without internet after the first visit.
-const CACHE = 'parts-scanner-v5';
-const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'parser.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
+const CACHE = 'bad-part-finder-v1';
+const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'parts.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
