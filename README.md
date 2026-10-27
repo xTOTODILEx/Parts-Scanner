@@ -7,7 +7,7 @@ A phone app for finding the troublesome parts. Scan a part's QR code and the app
 1. **Front page:** the 4 POs that contain bad parts are listed: **166690**, **167742**, **161945** and **167923**. Use them to spot the boxes. Each PO shows how many bad parts it has, how many you've found, and (under *Bad serial numbers*) the list of serials.
 2. **Tap the PO** of the box you are checking. Every part you scan is saved under that PO.
 3. Scan the parts:
-   - **▦ Scan part QR codes:** point the camera at a part's QR code (for example `https://mydmg.dmg.it/it/qr/?mat=16080625$$GA2604429`). The app reads the GA/NA code after `$$` and shows
+   - **▦ Scan part QR codes:** point the camera at a part's QR code (for example `https://mydmg.dmg.it/it/qr/?mat=16080625$$GA2604429`). As soon as it's read, the camera closes and the app shows the result for the GA/NA code after `$$`. (**Close**, bottom right, closes the camera without scanning.) The result is
      - **🚩 BAD PART** (red, with a buzz and alarm sound) if it is one of the bad serials, or
      - **✓ Not a problematic part** (green, short beep) if not.
    - **📷 Photo of many parts:** take one photo of several labels. Every QR code in it is checked, and bad parts get a red box on the photo. Tap **Scan harder** if some were missed.
