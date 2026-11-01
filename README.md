@@ -67,6 +67,8 @@ Open it in Chrome (Android) or Safari (iPhone) and add it to the home screen:
 
 The first scan needs internet to download the QR reader. After that it also works offline.
 
+Updates arrive by themselves: when you switch back to the app and a new version has been published, it reloads once (saved scans and counts are kept). If an update doesn't show, close the app fully and open it again.
+
 ## Files
 
 | File | What it does |
