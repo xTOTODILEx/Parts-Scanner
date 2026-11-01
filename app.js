@@ -596,14 +596,19 @@
     save(INV_KEY, inv);
   }
 
+  // Parts are shown under their category (GIOTTOS, RAFFAELLOS, MATISSES), each with its subtotal.
   function renderInventory() {
     const grid = $('inv-grid');
     grid.replaceChildren();
-    Inventory.PARTS.forEach((part) => {
-      const n = inv.counts[part] || 0;
-      grid.append(el('button', { type: 'button', class: 'inv-btn f-' + Inventory.family(part), 'data-part': part, onclick: () => tapPart(part) },
-        el('span', { class: 'inv-name' }, part),
-        el('span', { class: 'inv-count' + (n ? '' : ' zero') }, String(n))));
+    Inventory.groups().forEach((g) => {
+      grid.append(el('div', { class: 'inv-cat f-' + g.key },
+        el('div', { class: 'inv-cat-title' }, el('span', {}, g.name), el('span', {}, String(Inventory.total(inv, g.parts)))),
+        el('div', { class: 'inv-cat-grid' }, g.parts.map((part) => {
+          const n = inv.counts[part] || 0;
+          return el('button', { type: 'button', class: 'inv-btn', 'data-part': part, onclick: () => tapPart(part) },
+            el('span', { class: 'inv-name' }, part),
+            el('span', { class: 'inv-count' + (n ? '' : ' zero') }, String(n)));
+        }))));
     });
     grid.classList.toggle('removing', invRemove);
     $('inv-total').textContent = 'Total ' + Inventory.total(inv);
@@ -649,11 +654,16 @@
 
   function exportInventory() {
     if (typeof XLSX === 'undefined') { toast('Excel library did not load. Connect to the internet and reload.'); return; }
-    const rows = Inventory.PARTS.map((p) => ({ 'Part number': p, 'Count': inv.counts[p] || 0 }));
-    rows.push({ 'Part number': 'Total', 'Count': Inventory.total(inv) });
+    // One row per part under its category, a subtotal row after each category, then the total.
+    const rows = [];
+    Inventory.groups().forEach((g) => {
+      g.parts.forEach((p) => rows.push({ 'Category': g.name, 'Part number': p, 'Count': inv.counts[p] || 0 }));
+      rows.push({ 'Category': g.name + ' total', 'Part number': '', 'Count': Inventory.total(inv, g.parts) });
+    });
+    rows.push({ 'Category': 'Total', 'Part number': '', 'Count': Inventory.total(inv) });
     const wb = XLSX.utils.book_new();
-    const sheet = XLSX.utils.json_to_sheet(rows, { header: ['Part number', 'Count'] });
-    sheet['!cols'] = [{ wch: 16 }, { wch: 8 }];
+    const sheet = XLSX.utils.json_to_sheet(rows, { header: ['Category', 'Part number', 'Count'] });
+    sheet['!cols'] = [{ wch: 18 }, { wch: 16 }, { wch: 8 }];
     XLSX.utils.book_append_sheet(wb, sheet, 'Inventory');
     XLSX.writeFile(wb, 'inventory-count-' + new Date().toISOString().slice(0, 10) + '.xlsx');
   }
@@ -667,15 +677,24 @@
     invMsg('All counts reset.');
   });
 
-  // Make the buttons fill the rest of the screen so every part fits without scrolling.
+  // Make the buttons fill the rest of the screen so every part fits without scrolling: work out
+  // the button height from the space left after the category titles and gaps.
   function sizeInvGrid() {
-    const grid = $('inv-grid');
+    const wrap = $('inv-grid');
     if ($('tab-inv').hidden) return;
-    const rows = Math.ceil(Inventory.PARTS.length / 2);
     const gap = 5;
-    const space = window.innerHeight - grid.getBoundingClientRect().top - 8;
-    const h = Math.max(rows * 36 + (rows - 1) * gap, Math.min(space, rows * 72 + (rows - 1) * gap));
-    grid.style.height = h + 'px';
+    let rows = 0;
+    let fixed = 0;
+    wrap.querySelectorAll('.inv-cat').forEach((c) => {
+      const r = Math.ceil(c.querySelectorAll('.inv-btn').length / 2);
+      const title = c.querySelector('.inv-cat-title');
+      const cs = getComputedStyle(title);
+      rows += r;
+      fixed += title.offsetHeight + parseFloat(cs.marginTop) + parseFloat(cs.marginBottom) + (r - 1) * gap;
+    });
+    const space = window.innerHeight - wrap.getBoundingClientRect().top - 8;
+    const row = Math.max(32, Math.min(72, Math.floor((space - fixed) / rows)));
+    wrap.style.setProperty('--inv-row', row + 'px');
   }
   window.addEventListener('resize', sizeInvGrid);
 

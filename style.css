@@ -180,11 +180,22 @@ body.on-inv header { display: none; }
 .inv-line { display: flex; gap: 8px; align-items: baseline; margin: 5px 0; min-height: 1.3em; }
 .inv-msg { flex: 1; min-width: 0; font-size: .85rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .inv-total { font-weight: 700; font-size: .9rem; white-space: nowrap; }
-.inv-grid {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 5px;
-  grid-auto-rows: minmax(36px, 1fr); min-height: 0;
-  margin: 0 -8px; /* a little wider than the page margins, so long part numbers fit */
+.inv-grid { margin: 0 -8px; /* a little wider than the page margins, so long part numbers fit */ }
+.f-GIOTT { --fam: #1f6feb; }
+.f-RAFF { --fam: #8250df; }
+.f-MATIS { --fam: #1a7f37; }
+@media (prefers-color-scheme: dark) {
+  .f-GIOTT { --fam: #58a6ff; }
+  .f-RAFF { --fam: #bc8cff; }
+  .f-MATIS { --fam: #3fb950; }
 }
+.inv-cat-title {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin: 5px 4px 2px; font-size: .76rem; font-weight: 800; letter-spacing: .08em; line-height: 1.1;
+  color: var(--fam);
+}
+.inv-cat:first-child .inv-cat-title { margin-top: 0; }
+.inv-cat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; grid-auto-rows: var(--inv-row, 44px); }
 .inv-btn {
   display: flex; align-items: center; justify-content: space-between; gap: 6px;
   padding: 4px 7px 4px 8px; min-width: 0; height: 100%;
@@ -192,9 +203,6 @@ body.on-inv header { display: none; }
   background: var(--card); color: var(--text); border-radius: 10px;
   user-select: none; -webkit-user-select: none; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
 }
-.inv-btn.f-GIOTT { --fam: #1f6feb; }
-.inv-btn.f-RAFF { --fam: #8250df; }
-.inv-btn.f-MATIS { --fam: #1a7f37; }
 .inv-name { font-weight: 700; font-size: min(.95rem, 3.55vw); letter-spacing: -.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .inv-count { font-size: min(1.35rem, 5.2vw); font-weight: 800; font-variant-numeric: tabular-nums; min-width: 1.1em; text-align: right; }
 .inv-count.zero { color: var(--muted); font-weight: 600; }

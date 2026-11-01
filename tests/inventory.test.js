@@ -8,12 +8,21 @@ assert.strictEqual(new Set(I.PARTS).size, 29);
   .forEach((p) => assert.ok(I.PARTS.includes(p), p));
 assert.deepStrictEqual([...new Set(I.PARTS.map(I.family))], ['GIOTT', 'RAFF', 'MATIS']);
 
+// Three categories, every part in exactly one of them.
+const g = I.groups();
+assert.deepStrictEqual(g.map((x) => [x.name, x.parts.length]), [['GIOTTOS', 6], ['RAFFAELLOS', 6], ['MATISSES', 17]]);
+assert.ok(g[0].parts.every((p) => p.startsWith('PGIOT')));
+assert.ok(g[1].parts.every((p) => p.startsWith('PRAFF')));
+assert.ok(g[2].parts.every((p) => p.startsWith('PMATIS')));
+assert.strictEqual(I.category('PXYZ01').name, 'OTHER');
+
 const s = I.emptyState();
 assert.strictEqual(I.change(s, 'PRAFF02C.00', 1), true);
 I.change(s, 'PRAFF02C.00', 1);
 I.change(s, 'PMATIS10S.501', 1);
 assert.strictEqual(s.counts['PRAFF02C.00'], 2);
 assert.strictEqual(I.total(s), 3);
+assert.strictEqual(I.total(s, I.groups()[1].parts), 2);
 
 // Remove a count; never below zero.
 assert.strictEqual(I.change(s, 'PMATIS10S.501', -1), true);
