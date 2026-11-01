@@ -73,18 +73,39 @@
 
     <!-- 2. Inventory counter (separate from the bad part finder) -->
     <section id="tab-inv" class="panel inv-panel" hidden>
-      <div class="inv-bar">
-        <button id="inv-undo" type="button">↶ Undo</button>
-        <button id="inv-mode" type="button" aria-pressed="false">− Remove</button>
-        <button id="inv-export" type="button">⬇️ Excel</button>
+      <!-- Overstock and Stockroom are counted separately; Total adds them together. -->
+      <div class="inv-views" role="tablist">
+        <button type="button" class="inv-view" data-view="over" role="tab">Overstock <b id="inv-sum-over">0</b></button>
+        <button type="button" class="inv-view" data-view="stock" role="tab">Stockroom <b id="inv-sum-stock">0</b></button>
+        <button type="button" class="inv-view" data-view="total" role="tab">Total <b id="inv-sum-total">0</b></button>
       </div>
-      <div class="inv-line">
-        <span id="inv-msg" class="inv-msg">Tap a part to add 1.</span>
-        <span id="inv-total" class="inv-total"></span>
+
+      <div id="inv-counter">
+        <div class="inv-bar">
+          <button id="inv-undo" type="button">↶ Undo</button>
+          <button id="inv-mode" type="button" aria-pressed="false">− Remove</button>
+          <label class="inv-qty" title="Type an amount, then tap a part to add it">
+            <span>Qty</span>
+            <input id="inv-qty" type="number" inputmode="numeric" min="1" max="99999" step="1" placeholder="1" enterkeyhint="done" autocomplete="off">
+          </label>
+          <button id="inv-export" type="button">⬇️ Excel</button>
+        </div>
+        <div class="inv-line"><span id="inv-msg" class="inv-msg">Tap a part to add 1.</span></div>
+        <div id="inv-grid" class="inv-grid"></div>
+        <div class="row wrap inv-extra">
+          <button id="inv-reset" type="button" class="danger">Reset counts</button>
+        </div>
       </div>
-      <div id="inv-grid" class="inv-grid"></div>
-      <div class="row wrap inv-extra">
-        <button id="inv-reset" type="button" class="danger">Reset all counts</button>
+
+      <div id="inv-totals" hidden>
+        <div class="inv-totals-head">
+          <span class="muted">Overstock + Stockroom for each part</span>
+          <button id="inv-export-3" type="button">⬇️ Excel</button>
+        </div>
+        <table class="inv-table">
+          <thead><tr><th>Part number</th><th>Overstock</th><th>Stockroom</th><th>Total</th></tr></thead>
+          <tbody id="inv-table-body"></tbody>
+        </table>
       </div>
     </section>
 
@@ -100,7 +121,7 @@
       <button id="clear-all" class="danger">Delete all scans</button>
 
       <h2>Inventory counts</h2>
-      <p class="muted">The counts from the 🔢 Inventory page: one row per part number with its count, and a total.</p>
+      <p class="muted">The counts from the 🔢 Inventory page: one row per part number with its <b>Overstock</b>, <b>Stockroom</b> and <b>Total</b> count, with subtotals per category.</p>
       <div class="row wrap">
         <button id="inv-export-2" class="primary">⬇️ Export inventory to Excel</button>
       </div>

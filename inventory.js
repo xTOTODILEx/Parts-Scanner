@@ -78,8 +78,8 @@
     return { counts: {}, log: [] };
   }
 
-  // Add delta (+1 or -1) to a part. Counts never go below 0; a -1 at 0 changes nothing.
-  // Returns true if the count changed.
+  // Add delta to a part (+1 per tap, or a typed amount such as +60; negative to remove).
+  // Counts never go below 0; removing from 0 changes nothing. Returns true if the count changed.
   function change(state, part, delta) {
     const now = state.counts[part] || 0;
     const next = Math.max(0, now + delta);
@@ -102,7 +102,20 @@
     return (parts || PARTS).reduce((sum, p) => sum + (state.counts[p] || 0), 0);
   }
 
-  const api = { PARTS, CATEGORIES, category, family, groups, emptyState, change, undo, total };
+  // Add several counts together, e.g. Overstock + Stockroom. The result has no undo log.
+  function combine(...states) {
+    const counts = {};
+    states.forEach((st) => Object.keys(st.counts).forEach((p) => { counts[p] = (counts[p] || 0) + (st.counts[p] || 0); }));
+    return { counts, log: [] };
+  }
+
+  // A typed amount as a whole number from 1 to 99999; anything else (empty, 0, letters) counts as 1.
+  function amount(text) {
+    const n = Math.floor(Number(String(text == null ? '' : text).trim()));
+    return Number.isFinite(n) && n >= 1 ? Math.min(n, 99999) : 1;
+  }
+
+  const api = { PARTS, CATEGORIES, category, family, groups, emptyState, change, undo, total, combine, amount };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Inventory = api;
 })(typeof window !== 'undefined' ? window : this);
