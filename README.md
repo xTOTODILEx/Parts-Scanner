@@ -35,7 +35,7 @@ On Overstock and Stockroom, every part number is a button, all on one screen, gr
 - **Qty**: type an amount (for example 60), then tap a part to add that many at once. The box goes back to 1 after that tap.
 - **↶ Undo** takes back the last change (a whole Qty amount at once).
 - **− Remove**: while it's on (red, "Removing"), tapping a part takes 1 (or the Qty amount) off. Tap it again to go back to adding.
-- **⬇️ Excel** (on any view, or **Export inventory to Excel** on the 📊 Excel tab) downloads one sheet with Category, Part number, Overstock, Stockroom and Total, with a subtotal after each category and a Total row.
+- **⬇️ Excel** (on any view, or **Export inventory to Excel** on the 📊 Excel tab) downloads one Excel file with everything: a **Total** sheet (Category, Part number, Overstock, Stockroom, Total), plus an **Overstock** sheet and a **Stockroom** sheet. Each has a subtotal after each category and a Total row.
 - **Reset … counts** (below the buttons) sets the counts of the view you're on back to 0.
 
 Counts are saved on the phone, so they're still there after closing the app. To change the list of parts, edit the lines at the top of `inventory.js`; a part goes into a category by the start of its part number.

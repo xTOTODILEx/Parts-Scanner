@@ -740,22 +740,37 @@
   $('inv-export-2').addEventListener('click', exportInventory);
   $('inv-export-3').addEventListener('click', exportInventory);
 
+  // One Excel file with everything: a "Total" sheet with Overstock, Stockroom and Total side by side,
+  // then an "Overstock" sheet and a "Stockroom" sheet. Each lists the parts under their category with a
+  // subtotal row after each category and a grand total at the end.
   function exportInventory() {
     if (typeof XLSX === 'undefined') { toast('Excel library did not load. Connect to the internet and reload.'); return; }
-    // One row per part under its category with Overstock, Stockroom and Total, a subtotal row after
-    // each category, then the grand total.
-    const both = Inventory.combine(invState.over, invState.stock);
-    const row = (cat, part, over, stock, tot) => ({ 'Category': cat, 'Part number': part, 'Overstock': over, 'Stockroom': stock, 'Total': tot });
-    const rows = [];
-    Inventory.groups().forEach((g) => {
-      g.parts.forEach((p) => rows.push(row(g.name, p, invState.over.counts[p] || 0, invState.stock.counts[p] || 0, both.counts[p] || 0)));
-      rows.push(row(g.name + ' total', '', Inventory.total(invState.over, g.parts), Inventory.total(invState.stock, g.parts), Inventory.total(both, g.parts)));
-    });
-    rows.push(row('Total', '', Inventory.total(invState.over), Inventory.total(invState.stock), Inventory.total(both)));
+    const sets = [
+      { name: 'Overstock', st: invState.over },
+      { name: 'Stockroom', st: invState.stock },
+      { name: 'Total', st: Inventory.combine(invState.over, invState.stock) },
+    ];
+    const sheet = (columns) => {
+      const header = ['Category', 'Part number'].concat(columns.map((c) => c.name));
+      const rows = [];
+      const row = (cat, part, f) => {
+        const r = { 'Category': cat, 'Part number': part };
+        columns.forEach((c) => { r[c.name] = f(c.st); });
+        rows.push(r);
+      };
+      Inventory.groups().forEach((g) => {
+        g.parts.forEach((p) => row(g.name, p, (st) => st.counts[p] || 0));
+        row(g.name + ' total', '', (st) => Inventory.total(st, g.parts));
+      });
+      row('Total', '', (st) => Inventory.total(st));
+      const ws = XLSX.utils.json_to_sheet(rows, { header });
+      ws['!cols'] = [{ wch: 18 }, { wch: 16 }].concat(columns.map(() => ({ wch: 10 })));
+      return ws;
+    };
     const wb = XLSX.utils.book_new();
-    const sheet = XLSX.utils.json_to_sheet(rows, { header: ['Category', 'Part number', 'Overstock', 'Stockroom', 'Total'] });
-    sheet['!cols'] = [{ wch: 18 }, { wch: 16 }, { wch: 10 }, { wch: 10 }, { wch: 8 }];
-    XLSX.utils.book_append_sheet(wb, sheet, 'Inventory');
+    XLSX.utils.book_append_sheet(wb, sheet(sets), 'Total');
+    XLSX.utils.book_append_sheet(wb, sheet([sets[0]]), 'Overstock');
+    XLSX.utils.book_append_sheet(wb, sheet([sets[1]]), 'Stockroom');
     XLSX.writeFile(wb, 'inventory-count-' + new Date().toISOString().slice(0, 10) + '.xlsx');
   }
 
