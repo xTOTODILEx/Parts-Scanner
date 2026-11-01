@@ -20,7 +20,8 @@
   </header>
 
   <nav class="tabs" role="tablist">
-    <button class="tab active" data-tab="scan" role="tab">🚩 Find bad parts</button>
+    <button class="tab active" data-tab="scan" role="tab">🚩 Bad parts</button>
+    <button class="tab" data-tab="inv" role="tab">🔢 Inventory</button>
     <button class="tab" data-tab="data" role="tab">📊 Excel</button>
   </nav>
 
@@ -70,7 +71,22 @@
       </div>
     </section>
 
-    <!-- 2. Excel / history -->
+    <!-- 2. Inventory counter (separate from the bad part finder) -->
+    <section id="tab-inv" class="panel inv-panel" hidden>
+      <div class="inv-bar">
+        <button id="inv-undo" type="button">↶ Undo</button>
+        <button id="inv-mode" type="button" aria-pressed="false">− Remove mode</button>
+        <span id="inv-total" class="inv-total"></span>
+      </div>
+      <div id="inv-msg" class="inv-msg">Tap a part to add 1.</div>
+      <div id="inv-grid" class="inv-grid"></div>
+      <div class="row wrap inv-extra">
+        <button id="inv-export" type="button">⬇️ Export counts to Excel</button>
+        <button id="inv-reset" type="button" class="danger">Reset all counts</button>
+      </div>
+    </section>
+
+    <!-- 3. Excel / history -->
     <section id="tab-data" class="panel" hidden>
       <h2 class="first">Scanned parts</h2>
       <p class="muted">Every scanned part is saved on this phone. Export them as an Excel file with the columns <b>PO</b>, <b>GA/NA code</b> and <b>result</b>.</p>
@@ -88,6 +104,7 @@
   <script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.4/dist/iife/reader/index.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="parts.js"></script>
+  <script src="inventory.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -16,6 +16,17 @@ A phone app for finding the troublesome parts. Scan a part's QR code and the app
 
 Each part is saved once; scanning it again shows its result with "already scanned".
 
+## Inventory counter
+
+A separate page (**🔢 Inventory** tab), not connected to the bad part finder. Every part number is a button, all on one screen:
+
+- **Tap a part** to add 1 to its count.
+- **↶ Undo** takes back the last tap.
+- **− Remove mode**: while it's on (red), tapping a part takes 1 off. Tap it again to go back to adding.
+- **Export counts to Excel** downloads the counts (Part number, Count, and a Total row). **Reset all counts** sets everything back to 0.
+
+Counts are saved on the phone, so they're still there after closing the app. To change the list of parts, edit the lines at the top of `inventory.js`.
+
 ## The bad serial numbers
 
 | Serial number | DMG Order | PO MAD |
@@ -56,6 +67,7 @@ The first scan needs internet to download the QR reader. After that it also work
 | --- | --- |
 | `index.html`, `style.css` | The screens |
 | `parts.js` | The bad serial list, and reading the GA/NA code from a QR code |
+| `inventory.js` | The inventory counter's part list, and adding/removing/undoing counts |
 | `app.js` | Camera and photo QR scanning (zxing-wasm), results, storage, Excel export (SheetJS) |
 | `sw.js`, `manifest.webmanifest`, `icons/` | Home-screen install and offline support |
-| `tests/parts.test.js` | Tests for `parts.js`: `node tests/parts.test.js` |
+| `tests/*.test.js` | Tests: `node tests/parts.test.js` and `node tests/inventory.test.js` |
