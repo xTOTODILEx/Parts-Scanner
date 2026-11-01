@@ -169,3 +169,35 @@ h2.first { margin-top: 4px; }
 }
 .live-msg { font-size: .95rem; color: #d0d7de; }
 .live-close { flex: none; padding: 16px 26px; font-size: 1.1rem; }
+
+/* Inventory counter */
+.inv-panel { padding-top: 8px; }
+.inv-bar { display: flex; gap: 8px; align-items: center; }
+.inv-bar button { padding: 9px 12px; font-size: .95rem; }
+#inv-mode[aria-pressed="true"] { background: var(--danger); border-color: var(--danger); color: #fff; }
+.inv-total { margin-left: auto; font-weight: 700; font-size: .95rem; white-space: nowrap; }
+.inv-msg { font-size: .85rem; color: var(--muted); margin: 6px 0; min-height: 1.3em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.inv-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+  grid-auto-rows: minmax(44px, 1fr); min-height: 0;
+  margin: 0 -8px; /* a little wider than the page margins, so long part numbers fit */
+}
+.inv-btn {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  padding: 4px 7px 4px 8px; min-width: 0; height: 100%;
+  border: 1px solid var(--line); border-left: 6px solid var(--fam, var(--line));
+  background: var(--card); color: var(--text); border-radius: 10px;
+  user-select: none; -webkit-user-select: none; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.inv-btn.f-GIOTT { --fam: #1f6feb; }
+.inv-btn.f-RAFF { --fam: #8250df; }
+.inv-btn.f-MATIS { --fam: #1a7f37; }
+.inv-name { font-weight: 700; font-size: min(.95rem, 3.55vw); letter-spacing: -.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inv-count { font-size: min(1.35rem, 5.2vw); font-weight: 800; font-variant-numeric: tabular-nums; min-width: 1.1em; text-align: right; }
+.inv-count.zero { color: var(--muted); font-weight: 600; }
+.inv-btn:active { transform: scale(.97); }
+.inv-btn.flash { background: var(--ok-bg); }
+.inv-grid.removing .inv-btn { background: var(--bad-bg); border-color: var(--danger); }
+.inv-grid.removing .inv-btn.flash { background: var(--danger); color: #fff; }
+.inv-extra { margin-top: 14px; }
+.inv-extra .danger { margin-top: 0; }

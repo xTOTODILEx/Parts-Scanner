@@ -76,6 +76,7 @@
     document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
     document.querySelectorAll('.panel').forEach((p) => { p.hidden = p.id !== 'tab-' + name; });
     if (name === 'data') renderEntries();
+    if (name === 'inv') { window.scrollTo(0, 0); sizeInvGrid(); }
   }
 
   // ---------- POs ----------
@@ -575,7 +576,107 @@
     });
   }
 
+  // ---------- Inventory counter ----------
+  // Separate from the bad part finder: each part number is a button; tapping it adds 1.
+  // "Remove mode" makes taps subtract 1, and Undo reverses the last tap.
+  const INV_KEY = 'badPartFinder.inventory.v1';
+  let inv = loadInventory();
+  let invRemove = false;
+
+  function loadInventory() {
+    try {
+      const v = JSON.parse(localStorage.getItem(INV_KEY));
+      if (v && typeof v.counts === 'object' && Array.isArray(v.log)) return v;
+    } catch (e) { /* start fresh */ }
+    return Inventory.emptyState();
+  }
+
+  function saveInventory() {
+    save(INV_KEY, inv);
+  }
+
+  function renderInventory() {
+    const grid = $('inv-grid');
+    grid.replaceChildren();
+    Inventory.PARTS.forEach((part) => {
+      const n = inv.counts[part] || 0;
+      grid.append(el('button', { type: 'button', class: 'inv-btn f-' + Inventory.family(part), 'data-part': part, onclick: () => tapPart(part) },
+        el('span', { class: 'inv-name' }, part),
+        el('span', { class: 'inv-count' + (n ? '' : ' zero') }, String(n))));
+    });
+    grid.classList.toggle('removing', invRemove);
+    $('inv-total').textContent = 'Total ' + Inventory.total(inv);
+    $('inv-undo').disabled = !inv.log.length;
+  }
+
+  function tapPart(part) {
+    const delta = invRemove ? -1 : 1;
+    if (!Inventory.change(inv, part, delta)) {
+      invMsg(part + ' is already 0.');
+      return;
+    }
+    saveInventory();
+    renderInventory();
+    try { if (navigator.vibrate) navigator.vibrate(invRemove ? [30, 40, 30] : 15); } catch (e) { /* ignore */ }
+    const btn = $('inv-grid').querySelector('[data-part="' + part + '"]');
+    if (btn) { btn.classList.add('flash'); setTimeout(() => btn.classList.remove('flash'), 180); }
+    invMsg((delta > 0 ? '+1 ' : '−1 ') + part + ' → ' + inv.counts[part]);
+  }
+
+  function invMsg(text) {
+    $('inv-msg').textContent = text;
+  }
+
+  $('inv-mode').addEventListener('click', () => {
+    invRemove = !invRemove;
+    $('inv-mode').setAttribute('aria-pressed', String(invRemove));
+    $('inv-mode').textContent = invRemove ? '− Removing: tap to stop' : '− Remove mode';
+    invMsg(invRemove ? 'Remove mode: tap a part to take 1 off.' : 'Tap a part to add 1.');
+    renderInventory();
+  });
+
+  $('inv-undo').addEventListener('click', () => {
+    const last = Inventory.undo(inv);
+    if (!last) return;
+    saveInventory();
+    renderInventory();
+    invMsg('Undone: ' + (last.delta > 0 ? '+1 ' : '−1 ') + last.part + ' (now ' + (inv.counts[last.part] || 0) + ')');
+  });
+
+  $('inv-export').addEventListener('click', () => {
+    if (typeof XLSX === 'undefined') { toast('Excel library did not load. Connect to the internet and reload.'); return; }
+    const rows = Inventory.PARTS.map((p) => ({ 'Part number': p, 'Count': inv.counts[p] || 0 }));
+    rows.push({ 'Part number': 'Total', 'Count': Inventory.total(inv) });
+    const wb = XLSX.utils.book_new();
+    const sheet = XLSX.utils.json_to_sheet(rows, { header: ['Part number', 'Count'] });
+    sheet['!cols'] = [{ wch: 16 }, { wch: 8 }];
+    XLSX.utils.book_append_sheet(wb, sheet, 'Inventory');
+    XLSX.writeFile(wb, 'inventory-count-' + new Date().toISOString().slice(0, 10) + '.xlsx');
+  });
+
+  $('inv-reset').addEventListener('click', () => {
+    if (!Inventory.total(inv)) return;
+    if (!confirm('Reset all ' + Inventory.total(inv) + ' counts to 0? Export to Excel first if you want to keep them.')) return;
+    inv = Inventory.emptyState();
+    saveInventory();
+    renderInventory();
+    invMsg('All counts reset.');
+  });
+
+  // Make the buttons fill the rest of the screen so every part fits without scrolling.
+  function sizeInvGrid() {
+    const grid = $('inv-grid');
+    if ($('tab-inv').hidden) return;
+    const rows = Math.ceil(Inventory.PARTS.length / 2);
+    const gap = 6;
+    const space = window.innerHeight - grid.getBoundingClientRect().top - 10;
+    const h = Math.max(rows * 44 + (rows - 1) * gap, Math.min(space, rows * 80 + (rows - 1) * gap));
+    grid.style.height = h + 'px';
+  }
+  window.addEventListener('resize', sizeInvGrid);
+
   // ---------- Start ----------
+  renderInventory();
   updateCount();
   renderPos();
   renderRecent();
