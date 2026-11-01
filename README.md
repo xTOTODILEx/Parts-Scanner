@@ -22,8 +22,9 @@ A separate page (**🔢 Inventory** tab), not connected to the bad part finder. 
 
 - **Tap a part** to add 1 to its count.
 - **↶ Undo** takes back the last tap.
-- **− Remove mode**: while it's on (red), tapping a part takes 1 off. Tap it again to go back to adding.
-- **Export counts to Excel** downloads the counts (Part number, Count, and a Total row). **Reset all counts** sets everything back to 0.
+- **− Remove**: while it's on (red, "Removing"), tapping a part takes 1 off. Tap it again to go back to adding.
+- **⬇️ Excel** (top bar, or **Export inventory to Excel** on the 📊 Excel tab) downloads the counts: Part number, Count, and a Total row.
+- **Reset all counts** (below the buttons) sets everything back to 0.
 
 Counts are saved on the phone, so they're still there after closing the app. To change the list of parts, edit the lines at the top of `inventory.js`.
 

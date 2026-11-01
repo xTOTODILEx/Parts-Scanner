@@ -76,6 +76,7 @@
     document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
     document.querySelectorAll('.panel').forEach((p) => { p.hidden = p.id !== 'tab-' + name; });
     if (name === 'data') renderEntries();
+    document.body.classList.toggle('on-inv', name === 'inv');
     if (name === 'inv') { window.scrollTo(0, 0); sizeInvGrid(); }
   }
 
@@ -630,8 +631,8 @@
   $('inv-mode').addEventListener('click', () => {
     invRemove = !invRemove;
     $('inv-mode').setAttribute('aria-pressed', String(invRemove));
-    $('inv-mode').textContent = invRemove ? '− Removing: tap to stop' : '− Remove mode';
-    invMsg(invRemove ? 'Remove mode: tap a part to take 1 off.' : 'Tap a part to add 1.');
+    $('inv-mode').textContent = invRemove ? '− Removing' : '− Remove';
+    invMsg(invRemove ? 'Removing: tap a part to take 1 off. Tap "Removing" to stop.' : 'Tap a part to add 1.');
     renderInventory();
   });
 
@@ -643,7 +644,10 @@
     invMsg('Undone: ' + (last.delta > 0 ? '+1 ' : '−1 ') + last.part + ' (now ' + (inv.counts[last.part] || 0) + ')');
   });
 
-  $('inv-export').addEventListener('click', () => {
+  $('inv-export').addEventListener('click', exportInventory);
+  $('inv-export-2').addEventListener('click', exportInventory);
+
+  function exportInventory() {
     if (typeof XLSX === 'undefined') { toast('Excel library did not load. Connect to the internet and reload.'); return; }
     const rows = Inventory.PARTS.map((p) => ({ 'Part number': p, 'Count': inv.counts[p] || 0 }));
     rows.push({ 'Part number': 'Total', 'Count': Inventory.total(inv) });
@@ -652,7 +656,7 @@
     sheet['!cols'] = [{ wch: 16 }, { wch: 8 }];
     XLSX.utils.book_append_sheet(wb, sheet, 'Inventory');
     XLSX.writeFile(wb, 'inventory-count-' + new Date().toISOString().slice(0, 10) + '.xlsx');
-  });
+  }
 
   $('inv-reset').addEventListener('click', () => {
     if (!Inventory.total(inv)) return;
@@ -668,9 +672,9 @@
     const grid = $('inv-grid');
     if ($('tab-inv').hidden) return;
     const rows = Math.ceil(Inventory.PARTS.length / 2);
-    const gap = 6;
-    const space = window.innerHeight - grid.getBoundingClientRect().top - 10;
-    const h = Math.max(rows * 44 + (rows - 1) * gap, Math.min(space, rows * 80 + (rows - 1) * gap));
+    const gap = 5;
+    const space = window.innerHeight - grid.getBoundingClientRect().top - 8;
+    const h = Math.max(rows * 36 + (rows - 1) * gap, Math.min(space, rows * 72 + (rows - 1) * gap));
     grid.style.height = h + 'px';
   }
   window.addEventListener('resize', sizeInvGrid);

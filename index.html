@@ -75,13 +75,15 @@
     <section id="tab-inv" class="panel inv-panel" hidden>
       <div class="inv-bar">
         <button id="inv-undo" type="button">↶ Undo</button>
-        <button id="inv-mode" type="button" aria-pressed="false">− Remove mode</button>
+        <button id="inv-mode" type="button" aria-pressed="false">− Remove</button>
+        <button id="inv-export" type="button">⬇️ Excel</button>
+      </div>
+      <div class="inv-line">
+        <span id="inv-msg" class="inv-msg">Tap a part to add 1.</span>
         <span id="inv-total" class="inv-total"></span>
       </div>
-      <div id="inv-msg" class="inv-msg">Tap a part to add 1.</div>
       <div id="inv-grid" class="inv-grid"></div>
       <div class="row wrap inv-extra">
-        <button id="inv-export" type="button">⬇️ Export counts to Excel</button>
         <button id="inv-reset" type="button" class="danger">Reset all counts</button>
       </div>
     </section>
@@ -96,6 +98,12 @@
       <input id="filter-input" class="filter" placeholder="Filter by PO, code or result">
       <div id="entries"></div>
       <button id="clear-all" class="danger">Delete all scans</button>
+
+      <h2>Inventory counts</h2>
+      <p class="muted">The counts from the 🔢 Inventory page: one row per part number with its count, and a total.</p>
+      <div class="row wrap">
+        <button id="inv-export-2" class="primary">⬇️ Export inventory to Excel</button>
+      </div>
     </section>
   </main>
 

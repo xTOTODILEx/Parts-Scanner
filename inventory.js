@@ -17,16 +17,23 @@
     'PRAFF04C.50',
     'PRAFF04C.00',
     'PRAFF04S.00',
+    'PMATIS00C.50',
+    'PMATIS00C.501',
+    'PMATIS00S.50',
+    'PMATIS00S.501',
     'PMATIS07C.50',
     'PMATIS07C.501',
     'PMATIS07L.50',
     'PMATIS07L.501',
+    'PMATIS07S.50',
+    'PMATIS07S.501',
     'PMATIS10C.50',
     'PMATIS10C.501',
     'PMATIS10L.50',
     'PMATIS10L.501',
     'PMATIS10S.50',
     'PMATIS10S.501',
+    'PMATIS15C.50',
   ];
 
   // Family name used to colour the buttons, e.g. "PGIOTT07C" -> "GIOTT".
