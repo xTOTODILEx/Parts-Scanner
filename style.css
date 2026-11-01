@@ -172,14 +172,17 @@ h2.first { margin-top: 4px; }
 
 /* Inventory counter */
 .inv-panel { padding-top: 8px; }
-.inv-bar { display: flex; gap: 8px; align-items: center; }
-.inv-bar button { padding: 9px 12px; font-size: .95rem; }
+/* The app title is hidden on this page to leave room for the buttons. */
+body.on-inv header { display: none; }
+.inv-bar { display: flex; gap: 6px; align-items: center; }
+.inv-bar button { flex: 1 1 0; padding: 9px 6px; font-size: .95rem; }
 #inv-mode[aria-pressed="true"] { background: var(--danger); border-color: var(--danger); color: #fff; }
-.inv-total { margin-left: auto; font-weight: 700; font-size: .95rem; white-space: nowrap; }
-.inv-msg { font-size: .85rem; color: var(--muted); margin: 6px 0; min-height: 1.3em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.inv-line { display: flex; gap: 8px; align-items: baseline; margin: 5px 0; min-height: 1.3em; }
+.inv-msg { flex: 1; min-width: 0; font-size: .85rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.inv-total { font-weight: 700; font-size: .9rem; white-space: nowrap; }
 .inv-grid {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
-  grid-auto-rows: minmax(44px, 1fr); min-height: 0;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 5px;
+  grid-auto-rows: minmax(36px, 1fr); min-height: 0;
   margin: 0 -8px; /* a little wider than the page margins, so long part numbers fit */
 }
 .inv-btn {

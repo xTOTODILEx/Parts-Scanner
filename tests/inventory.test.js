@@ -2,8 +2,10 @@
 const assert = require('assert');
 const I = require('../inventory.js');
 
-assert.strictEqual(I.PARTS.length, 22);
-assert.strictEqual(new Set(I.PARTS).size, 22);
+assert.strictEqual(I.PARTS.length, 29);
+assert.strictEqual(new Set(I.PARTS).size, 29);
+['PMATIS00S.501', 'PMATIS00S.50', 'PMATIS00C.501', 'PMATIS00C.50', 'PMATIS07S.50', 'PMATIS07S.501', 'PMATIS15C.50']
+  .forEach((p) => assert.ok(I.PARTS.includes(p), p));
 assert.deepStrictEqual([...new Set(I.PARTS.map(I.family))], ['GIOTT', 'RAFF', 'MATIS']);
 
 const s = I.emptyState();
