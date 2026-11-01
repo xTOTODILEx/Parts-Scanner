@@ -23,6 +23,7 @@ A separate page (**🔢 Inventory** tab), not connected to the bad part finder. 
 - **GIOTTOS**: parts starting with PGIOT
 - **RAFFAELLOS**: parts starting with PRAFF
 - **MATISSES**: parts starting with PMATIS
+- **ECS PARTS**: parts starting with E. (for example E.PMATIS10C.501)
 
 
 - **Tap a part** to add 1 to its count.

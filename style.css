@@ -171,23 +171,27 @@ h2.first { margin-top: 4px; }
 .live-close { flex: none; padding: 16px 26px; font-size: 1.1rem; }
 
 /* Inventory counter */
-.inv-panel { padding-top: 8px; }
+.inv-panel { padding-top: 6px; }
 /* The app title is hidden on this page to leave room for the buttons. */
 body.on-inv header { display: none; }
+body.on-inv .tabs { padding: 5px 16px; }
+body.on-inv .tab { padding: 6px 10px; }
 .inv-bar { display: flex; gap: 6px; align-items: center; }
-.inv-bar button { flex: 1 1 0; padding: 9px 6px; font-size: .95rem; }
+.inv-bar button { flex: 1 1 0; padding: 7px 6px; font-size: .95rem; }
 #inv-mode[aria-pressed="true"] { background: var(--danger); border-color: var(--danger); color: #fff; }
-.inv-line { display: flex; gap: 8px; align-items: baseline; margin: 5px 0; min-height: 1.3em; }
+.inv-line { display: flex; gap: 8px; align-items: baseline; margin: 3px 0 2px; min-height: 1.3em; }
 .inv-msg { flex: 1; min-width: 0; font-size: .85rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .inv-total { font-weight: 700; font-size: .9rem; white-space: nowrap; }
 .inv-grid { margin: 0 -8px; /* a little wider than the page margins, so long part numbers fit */ }
 .f-GIOTT { --fam: #1f6feb; }
 .f-RAFF { --fam: #8250df; }
 .f-MATIS { --fam: #1a7f37; }
+.f-ECS { --fam: #bc4c00; }
 @media (prefers-color-scheme: dark) {
   .f-GIOTT { --fam: #58a6ff; }
   .f-RAFF { --fam: #bc8cff; }
   .f-MATIS { --fam: #3fb950; }
+  .f-ECS { --fam: #f0883e; }
 }
 .inv-cat-title {
   display: flex; justify-content: space-between; align-items: baseline;

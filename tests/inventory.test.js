@@ -2,18 +2,20 @@
 const assert = require('assert');
 const I = require('../inventory.js');
 
-assert.strictEqual(I.PARTS.length, 29);
-assert.strictEqual(new Set(I.PARTS).size, 29);
+assert.strictEqual(I.PARTS.length, 34);
+assert.strictEqual(new Set(I.PARTS).size, 34);
 ['PMATIS00S.501', 'PMATIS00S.50', 'PMATIS00C.501', 'PMATIS00C.50', 'PMATIS07S.50', 'PMATIS07S.501', 'PMATIS15C.50']
   .forEach((p) => assert.ok(I.PARTS.includes(p), p));
-assert.deepStrictEqual([...new Set(I.PARTS.map(I.family))], ['GIOTT', 'RAFF', 'MATIS']);
+assert.deepStrictEqual([...new Set(I.PARTS.map(I.family))], ['GIOTT', 'RAFF', 'MATIS', 'ECS']);
 
 // Three categories, every part in exactly one of them.
 const g = I.groups();
-assert.deepStrictEqual(g.map((x) => [x.name, x.parts.length]), [['GIOTTOS', 6], ['RAFFAELLOS', 6], ['MATISSES', 17]]);
+assert.deepStrictEqual(g.map((x) => [x.name, x.parts.length]), [['GIOTTOS', 6], ['RAFFAELLOS', 6], ['MATISSES', 18], ['ECS PARTS', 4]]);
 assert.ok(g[0].parts.every((p) => p.startsWith('PGIOT')));
 assert.ok(g[1].parts.every((p) => p.startsWith('PRAFF')));
 assert.ok(g[2].parts.every((p) => p.startsWith('PMATIS')));
+assert.ok(g[2].parts.includes('PMATIS15S.50'));
+assert.deepStrictEqual(g[3].parts, ['E.PMATIS00C.501', 'E.PMATIS00S.501', 'E.PMATIS10C.501', 'E.PMATIS15C.50']);
 assert.strictEqual(I.category('PXYZ01').name, 'OTHER');
 
 const s = I.emptyState();

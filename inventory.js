@@ -34,6 +34,11 @@
     'PMATIS10S.50',
     'PMATIS10S.501',
     'PMATIS15C.50',
+    'PMATIS15S.50',
+    'E.PMATIS00C.501',
+    'E.PMATIS00S.501',
+    'E.PMATIS10C.501',
+    'E.PMATIS15C.50',
   ];
 
   // The buttons are shown in these categories, by the start of the part number.
@@ -41,6 +46,7 @@
     { name: 'GIOTTOS', prefix: 'PGIOT', key: 'GIOTT' },
     { name: 'RAFFAELLOS', prefix: 'PRAFF', key: 'RAFF' },
     { name: 'MATISSES', prefix: 'PMATIS', key: 'MATIS' },
+    { name: 'ECS PARTS', prefix: 'E.', key: 'ECS' },
   ];
 
   // The category a part belongs to, e.g. "PGIOTT07C" -> GIOTTOS. Unknown prefixes go in "OTHER".
