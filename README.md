@@ -18,15 +18,20 @@ Each part is saved once; scanning it again shows its result with "already scanne
 
 ## Inventory counter
 
-A separate page (**🔢 Inventory** tab), not connected to the bad part finder. Every part number is a button, all on one screen:
+A separate page (**🔢 Inventory** tab), not connected to the bad part finder. Every part number is a button, all on one screen, grouped in three categories, each with its subtotal:
+
+- **GIOTTOS**: parts starting with PGIOT
+- **RAFFAELLOS**: parts starting with PRAFF
+- **MATISSES**: parts starting with PMATIS
+
 
 - **Tap a part** to add 1 to its count.
 - **↶ Undo** takes back the last tap.
 - **− Remove**: while it's on (red, "Removing"), tapping a part takes 1 off. Tap it again to go back to adding.
-- **⬇️ Excel** (top bar, or **Export inventory to Excel** on the 📊 Excel tab) downloads the counts: Part number, Count, and a Total row.
+- **⬇️ Excel** (top bar, or **Export inventory to Excel** on the 📊 Excel tab) downloads the counts: Category, Part number and Count, with a subtotal after each category and a Total row.
 - **Reset all counts** (below the buttons) sets everything back to 0.
 
-Counts are saved on the phone, so they're still there after closing the app. To change the list of parts, edit the lines at the top of `inventory.js`.
+Counts are saved on the phone, so they're still there after closing the app. To change the list of parts, edit the lines at the top of `inventory.js`; a part goes into a category by the start of its part number.
 
 ## The bad serial numbers
 

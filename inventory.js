@@ -36,10 +36,34 @@
     'PMATIS15C.50',
   ];
 
-  // Family name used to colour the buttons, e.g. "PGIOTT07C" -> "GIOTT".
+  // The buttons are shown in these categories, by the start of the part number.
+  const CATEGORIES = [
+    { name: 'GIOTTOS', prefix: 'PGIOT', key: 'GIOTT' },
+    { name: 'RAFFAELLOS', prefix: 'PRAFF', key: 'RAFF' },
+    { name: 'MATISSES', prefix: 'PMATIS', key: 'MATIS' },
+  ];
+
+  // The category a part belongs to, e.g. "PGIOTT07C" -> GIOTTOS. Unknown prefixes go in "OTHER".
+  function category(part) {
+    return CATEGORIES.find((c) => String(part).startsWith(c.prefix)) || { name: 'OTHER', prefix: '', key: 'OTHER' };
+  }
+
+  // Family key used to colour the buttons, e.g. "PGIOTT07C" -> "GIOTT".
   function family(part) {
-    const m = String(part).match(/^P([A-Z]+?)\d/);
-    return m ? m[1] : '';
+    return category(part).key;
+  }
+
+  // The categories with their parts, in list order; categories with no parts are left out.
+  function groups() {
+    const out = [];
+    PARTS.forEach((p) => {
+      const c = category(p);
+      let g = out.find((x) => x.name === c.name);
+      if (!g) out.push(g = { name: c.name, key: c.key, parts: [] });
+      g.parts.push(p);
+    });
+    const order = CATEGORIES.map((c) => c.name);
+    return out.sort((a, b) => (order.indexOf(a.name) + 1 || 99) - (order.indexOf(b.name) + 1 || 99));
   }
 
   // state: { counts: { part: n }, log: [{ part, delta }] }. The log lets the last change be undone.
@@ -67,11 +91,11 @@
     return last;
   }
 
-  function total(state) {
-    return PARTS.reduce((sum, p) => sum + (state.counts[p] || 0), 0);
+  function total(state, parts) {
+    return (parts || PARTS).reduce((sum, p) => sum + (state.counts[p] || 0), 0);
   }
 
-  const api = { PARTS, family, emptyState, change, undo, total };
+  const api = { PARTS, CATEGORIES, category, family, groups, emptyState, change, undo, total };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Inventory = api;
 })(typeof window !== 'undefined' ? window : this);
