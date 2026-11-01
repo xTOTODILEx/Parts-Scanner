@@ -37,6 +37,7 @@
     'PMATIS15S.50',
     'E.PMATIS00C.501',
     'E.PMATIS00S.501',
+    'E.PMATIS10C.50',
     'E.PMATIS10C.501',
     'E.PMATIS15C.50',
   ];
