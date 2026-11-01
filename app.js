@@ -704,6 +704,19 @@
   renderPos();
   renderRecent();
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    // Check for a new version whenever the app comes back to the screen, and reload once when one
+    // takes over, so updates show up without closing the app. Saved scans and counts are kept.
+    const hadVersion = !!navigator.serviceWorker.controller;
+    let reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadVersion || reloading || !$('live').hidden) return;
+      reloading = true;
+      location.reload();
+    });
+    navigator.serviceWorker.register('sw.js').then((reg) => {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') reg.update().catch(() => {});
+      });
+    }).catch(() => {});
   }
 })();
