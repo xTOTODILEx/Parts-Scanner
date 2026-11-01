@@ -578,46 +578,130 @@
   }
 
   // ---------- Inventory counter ----------
-  // Separate from the bad part finder: each part number is a button; tapping it adds 1.
-  // "Remove mode" makes taps subtract 1, and Undo reverses the last tap.
-  const INV_KEY = 'badPartFinder.inventory.v1';
-  let inv = loadInventory();
+  // Separate from the bad part finder. Two sets of counts with the same parts: Overstock and
+  // Stockroom; the Total view adds them together. Each part number is a button: a tap adds 1, or the
+  // amount typed in Qty (e.g. 60). "Remove" makes taps subtract, and Undo reverses the last change.
+  const INV_SETS = {
+    over: { name: 'Overstock', key: 'badPartFinder.inventory.v1' }, // the counts made before Stockroom existed
+    stock: { name: 'Stockroom', key: 'badPartFinder.stockroom.v1' },
+  };
+  const INV_VIEW_KEY = 'badPartFinder.invView.v1';
+  const invState = { over: loadInventory(INV_SETS.over.key), stock: loadInventory(INV_SETS.stock.key) };
+  let invView = load(INV_VIEW_KEY, 'over');
+  if (!['over', 'stock', 'total'].includes(invView)) invView = 'over';
   let invRemove = false;
 
-  function loadInventory() {
+  function loadInventory(key) {
     try {
-      const v = JSON.parse(localStorage.getItem(INV_KEY));
+      const v = JSON.parse(localStorage.getItem(key));
       if (v && typeof v.counts === 'object' && Array.isArray(v.log)) return v;
     } catch (e) { /* start fresh */ }
     return Inventory.emptyState();
   }
 
-  function saveInventory() {
-    save(INV_KEY, inv);
+  // The set of counts being changed on screen (Overstock or Stockroom).
+  function invCur() {
+    return invState[invView];
   }
 
-  // Parts are shown under their category (GIOTTOS, RAFFAELLOS, MATISSES), each with its subtotal.
+  function saveInventory() {
+    save(INV_SETS[invView].key, invCur());
+  }
+
+  function setInvView(view) {
+    invView = view;
+    save(INV_VIEW_KEY, view);
+    invRemove = false;
+    $('inv-mode').setAttribute('aria-pressed', 'false');
+    $('inv-mode').textContent = '− Remove';
+    clearQty();
+    renderInventory();
+    if (view !== 'total') invMsg('Counting ' + INV_SETS[view].name + '. Tap a part to add 1.');
+    window.scrollTo(0, 0);
+    sizeInvGrid();
+  }
+
+  document.querySelectorAll('.inv-view').forEach((b) => b.addEventListener('click', () => setInvView(b.dataset.view)));
+
   function renderInventory() {
+    const totalView = invView === 'total';
+    document.querySelectorAll('.inv-view').forEach((b) => b.classList.toggle('active', b.dataset.view === invView));
+    $('inv-sum-over').textContent = Inventory.total(invState.over);
+    $('inv-sum-stock').textContent = Inventory.total(invState.stock);
+    $('inv-sum-total').textContent = Inventory.total(invState.over) + Inventory.total(invState.stock);
+    $('inv-counter').hidden = totalView;
+    $('inv-totals').hidden = !totalView;
+    if (totalView) { renderInvTotals(); return; }
+
+    // Parts are shown under their category (GIOTTOS, RAFFAELLOS, ...), each with its subtotal.
+    const st = invCur();
     const grid = $('inv-grid');
     grid.replaceChildren();
     Inventory.groups().forEach((g) => {
       grid.append(el('div', { class: 'inv-cat f-' + g.key },
-        el('div', { class: 'inv-cat-title' }, el('span', {}, g.name), el('span', {}, String(Inventory.total(inv, g.parts)))),
+        el('div', { class: 'inv-cat-title' }, el('span', {}, g.name), el('span', {}, String(Inventory.total(st, g.parts)))),
         el('div', { class: 'inv-cat-grid' }, g.parts.map((part) => {
-          const n = inv.counts[part] || 0;
+          const n = st.counts[part] || 0;
           return el('button', { type: 'button', class: 'inv-btn', 'data-part': part, onclick: () => tapPart(part) },
             el('span', { class: 'inv-name' }, part),
             el('span', { class: 'inv-count' + (n ? '' : ' zero') }, String(n)));
         }))));
     });
     grid.classList.toggle('removing', invRemove);
-    $('inv-total').textContent = 'Total ' + Inventory.total(inv);
-    $('inv-undo').disabled = !inv.log.length;
+    $('inv-undo').disabled = !st.log.length;
+    $('inv-reset').textContent = 'Reset ' + INV_SETS[invView].name + ' counts';
   }
 
+  // Overstock + Stockroom for every part, grouped by category.
+  function renderInvTotals() {
+    const both = Inventory.combine(invState.over, invState.stock);
+    const body = $('inv-table-body');
+    body.replaceChildren();
+    const num = (n) => el('td', { class: n ? '' : 'zero' }, String(n));
+    Inventory.groups().forEach((g) => {
+      body.append(el('tr', { class: 'cat f-' + g.key },
+        el('td', {}, g.name),
+        el('td', {}, String(Inventory.total(invState.over, g.parts))),
+        el('td', {}, String(Inventory.total(invState.stock, g.parts))),
+        el('td', {}, String(Inventory.total(both, g.parts)))));
+      g.parts.forEach((p) => body.append(el('tr', { class: 'f-' + g.key },
+        el('td', { class: 'part' }, p),
+        num(invState.over.counts[p] || 0), num(invState.stock.counts[p] || 0), num(both.counts[p] || 0))));
+    });
+    body.append(el('tr', { class: 'grand' },
+      el('td', {}, 'Total'),
+      el('td', {}, String(Inventory.total(invState.over))),
+      el('td', {}, String(Inventory.total(invState.stock))),
+      el('td', {}, String(Inventory.total(both)))));
+  }
+
+  // The Qty box: an amount typed here is used for the next tap only, then it goes back to 1.
+  function qtyValue() {
+    return $('inv-qty').value.trim() ? Inventory.amount($('inv-qty').value) : 1;
+  }
+
+  function clearQty() {
+    $('inv-qty').value = '';
+    $('inv-qty').classList.remove('set');
+  }
+
+  $('inv-qty').addEventListener('input', () => {
+    const n = qtyValue();
+    const set = $('inv-qty').value.trim() !== '' && n > 1;
+    $('inv-qty').classList.toggle('set', set);
+    if (set) invMsg('Now tap a part to ' + (invRemove ? 'take off ' : 'add ') + n + '.', 'qty');
+    else invMsg(invRemove ? 'Removing: tap a part to take 1 off.' : 'Tap a part to add 1.');
+  });
+  // "Done"/Enter closes the number keyboard so the parts can be tapped.
+  $('inv-qty').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('inv-qty').blur(); });
+
   function tapPart(part) {
-    const delta = invRemove ? -1 : 1;
-    if (!Inventory.change(inv, part, delta)) {
+    const st = invCur();
+    const n = qtyValue();
+    const delta = invRemove ? -n : n;
+    const before = st.counts[part] || 0;
+    clearQty();
+    if (!Inventory.change(st, part, delta)) {
       invMsg(part + ' is already 0.');
       return;
     }
@@ -626,62 +710,71 @@
     try { if (navigator.vibrate) navigator.vibrate(invRemove ? [30, 40, 30] : 15); } catch (e) { /* ignore */ }
     const btn = $('inv-grid').querySelector('[data-part="' + part + '"]');
     if (btn) { btn.classList.add('flash'); setTimeout(() => btn.classList.remove('flash'), 180); }
-    invMsg((delta > 0 ? '+1 ' : '−1 ') + part + ' → ' + inv.counts[part]);
+    const changed = st.counts[part] - before;
+    invMsg((changed > 0 ? '+' : '−') + Math.abs(changed) + ' ' + part + ' → ' + st.counts[part] + ' (' + INV_SETS[invView].name + ')');
   }
 
-  function invMsg(text) {
+  function invMsg(text, kind) {
     $('inv-msg').textContent = text;
+    $('inv-msg').className = 'inv-msg' + (kind ? ' ' + kind : '');
   }
 
   $('inv-mode').addEventListener('click', () => {
     invRemove = !invRemove;
     $('inv-mode').setAttribute('aria-pressed', String(invRemove));
     $('inv-mode').textContent = invRemove ? '− Removing' : '− Remove';
-    invMsg(invRemove ? 'Removing: tap a part to take 1 off. Tap "Removing" to stop.' : 'Tap a part to add 1.');
+    invMsg(invRemove ? 'Removing: tap a part to take ' + qtyValue() + ' off. Tap "Removing" to stop.' : 'Tap a part to add ' + qtyValue() + '.');
     renderInventory();
   });
 
   $('inv-undo').addEventListener('click', () => {
-    const last = Inventory.undo(inv);
+    const st = invCur();
+    const last = Inventory.undo(st);
     if (!last) return;
     saveInventory();
     renderInventory();
-    invMsg('Undone: ' + (last.delta > 0 ? '+1 ' : '−1 ') + last.part + ' (now ' + (inv.counts[last.part] || 0) + ')');
+    invMsg('Undone: ' + (last.delta > 0 ? '+' : '−') + Math.abs(last.delta) + ' ' + last.part + ' (now ' + (st.counts[last.part] || 0) + ')');
   });
 
   $('inv-export').addEventListener('click', exportInventory);
   $('inv-export-2').addEventListener('click', exportInventory);
+  $('inv-export-3').addEventListener('click', exportInventory);
 
   function exportInventory() {
     if (typeof XLSX === 'undefined') { toast('Excel library did not load. Connect to the internet and reload.'); return; }
-    // One row per part under its category, a subtotal row after each category, then the total.
+    // One row per part under its category with Overstock, Stockroom and Total, a subtotal row after
+    // each category, then the grand total.
+    const both = Inventory.combine(invState.over, invState.stock);
+    const row = (cat, part, over, stock, tot) => ({ 'Category': cat, 'Part number': part, 'Overstock': over, 'Stockroom': stock, 'Total': tot });
     const rows = [];
     Inventory.groups().forEach((g) => {
-      g.parts.forEach((p) => rows.push({ 'Category': g.name, 'Part number': p, 'Count': inv.counts[p] || 0 }));
-      rows.push({ 'Category': g.name + ' total', 'Part number': '', 'Count': Inventory.total(inv, g.parts) });
+      g.parts.forEach((p) => rows.push(row(g.name, p, invState.over.counts[p] || 0, invState.stock.counts[p] || 0, both.counts[p] || 0)));
+      rows.push(row(g.name + ' total', '', Inventory.total(invState.over, g.parts), Inventory.total(invState.stock, g.parts), Inventory.total(both, g.parts)));
     });
-    rows.push({ 'Category': 'Total', 'Part number': '', 'Count': Inventory.total(inv) });
+    rows.push(row('Total', '', Inventory.total(invState.over), Inventory.total(invState.stock), Inventory.total(both)));
     const wb = XLSX.utils.book_new();
-    const sheet = XLSX.utils.json_to_sheet(rows, { header: ['Category', 'Part number', 'Count'] });
-    sheet['!cols'] = [{ wch: 18 }, { wch: 16 }, { wch: 8 }];
+    const sheet = XLSX.utils.json_to_sheet(rows, { header: ['Category', 'Part number', 'Overstock', 'Stockroom', 'Total'] });
+    sheet['!cols'] = [{ wch: 18 }, { wch: 16 }, { wch: 10 }, { wch: 10 }, { wch: 8 }];
     XLSX.utils.book_append_sheet(wb, sheet, 'Inventory');
     XLSX.writeFile(wb, 'inventory-count-' + new Date().toISOString().slice(0, 10) + '.xlsx');
   }
 
   $('inv-reset').addEventListener('click', () => {
-    if (!Inventory.total(inv)) return;
-    if (!confirm('Reset all ' + Inventory.total(inv) + ' counts to 0? Export to Excel first if you want to keep them.')) return;
-    inv = Inventory.emptyState();
+    const st = invCur();
+    const name = INV_SETS[invView].name;
+    if (!Inventory.total(st)) return;
+    if (!confirm('Reset all ' + Inventory.total(st) + ' ' + name + ' counts to 0? Export to Excel first if you want to keep them.')) return;
+    invState[invView] = Inventory.emptyState();
     saveInventory();
     renderInventory();
-    invMsg('All counts reset.');
+    invMsg('All ' + name + ' counts reset.');
   });
 
   // Make the buttons fill the rest of the screen so every part fits without scrolling: work out
   // the button height from the space left after the category titles and gaps.
   function sizeInvGrid() {
     const wrap = $('inv-grid');
-    if ($('tab-inv').hidden) return;
+    if ($('tab-inv').hidden || invView === 'total') return;
     const gap = 5;
     let rows = 0;
     let fixed = 0;
@@ -693,7 +786,7 @@
       fixed += title.offsetHeight + parseFloat(cs.marginTop) + parseFloat(cs.marginBottom) + (r - 1) * gap;
     });
     const space = window.innerHeight - wrap.getBoundingClientRect().top - 8;
-    const row = Math.max(32, Math.min(72, Math.floor((space - fixed) / rows)));
+    const row = Math.max(30, Math.min(72, Math.floor((space - fixed) / rows)));
     wrap.style.setProperty('--inv-row', row + 'px');
   }
   window.addEventListener('resize', sizeInvGrid);

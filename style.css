@@ -72,6 +72,7 @@ button, .button {
   cursor: pointer; white-space: nowrap;
 }
 .button { color: var(--text); }
+button, .button { -webkit-tap-highlight-color: transparent; }
 button.primary, .button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 button.danger { color: var(--danger); border-color: var(--danger); margin-top: 24px; }
 .big { flex: 1 1 150px; padding: 18px 16px; font-size: 1.05rem; }
@@ -176,10 +177,24 @@ h2.first { margin-top: 4px; }
 body.on-inv header { display: none; }
 body.on-inv .tabs { padding: 5px 16px; }
 body.on-inv .tab { padding: 6px 10px; }
-.inv-bar { display: flex; gap: 6px; align-items: center; }
-.inv-bar button { flex: 1 1 0; padding: 7px 6px; font-size: .95rem; }
+.inv-views { display: flex; gap: 4px; margin-bottom: 6px; background: var(--line); padding: 3px; border-radius: 10px; }
+.inv-view {
+  flex: 1 1 0; padding: 5px 4px; font-size: .88rem; border: 0; border-radius: 8px; background: transparent;
+  color: var(--text); white-space: nowrap; min-width: 0;
+}
+.inv-view b { font-variant-numeric: tabular-nums; }
+.inv-view.active { background: var(--accent); color: var(--accent-text); font-weight: 700; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+.inv-bar { display: flex; gap: 5px; align-items: center; }
+.inv-bar button { flex: 1 1 0; padding: 7px 4px; font-size: .9rem; min-width: 0; }
+.inv-qty {
+  display: flex; align-items: center; gap: 4px; margin: 0; flex: 1 1 0; min-width: 0;
+  font-size: .8rem; color: var(--muted); font-weight: 600;
+}
+.inv-qty input { width: 100%; min-width: 0; padding: 6px 6px; font-size: 1rem; font-weight: 700; text-align: center; }
+.inv-qty input.set { background: #fff8c5; border-color: var(--warn); color: #1b1f24; }
 #inv-mode[aria-pressed="true"] { background: var(--danger); border-color: var(--danger); color: #fff; }
 .inv-line { display: flex; gap: 8px; align-items: baseline; margin: 3px 0 2px; min-height: 1.3em; }
+.inv-msg.qty { color: var(--warn); font-weight: 700; }
 .inv-msg { flex: 1; min-width: 0; font-size: .85rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .inv-total { font-weight: 700; font-size: .9rem; white-space: nowrap; }
 .inv-grid { margin: 0 -8px; /* a little wider than the page margins, so long part numbers fit */ }
@@ -216,3 +231,16 @@ body.on-inv .tab { padding: 6px 10px; }
 .inv-grid.removing .inv-btn.flash { background: var(--danger); color: #fff; }
 .inv-extra { margin-top: 14px; }
 .inv-extra .danger { margin-top: 0; }
+
+/* Inventory totals (Overstock + Stockroom) */
+.inv-totals-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 2px 0 6px; }
+.inv-totals-head button { padding: 7px 12px; font-size: .9rem; }
+.inv-table { width: 100%; border-collapse: collapse; font-size: .88rem; font-variant-numeric: tabular-nums; }
+.inv-table th { position: sticky; top: 0; background: var(--bg); text-align: right; font-size: .75rem; color: var(--muted); padding: 4px 4px; }
+.inv-table th:first-child, .inv-table td:first-child { text-align: left; }
+.inv-table td { padding: 5px 4px; border-bottom: 1px solid var(--line); text-align: right; }
+.inv-table td.zero { color: var(--muted); }
+.inv-table td:last-child { font-weight: 800; }
+.inv-table tr.cat td { color: var(--fam); font-weight: 800; letter-spacing: .04em; font-size: .78rem; padding-top: 10px; border-bottom: 2px solid var(--fam); }
+.inv-table tr.grand td { font-weight: 800; font-size: 1rem; border-top: 2px solid var(--text); border-bottom: 0; padding-top: 8px; }
+.inv-table td.part { font-weight: 600; border-left: 4px solid var(--fam); padding-left: 6px; }

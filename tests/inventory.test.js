@@ -42,4 +42,28 @@ I.undo(s);
 assert.strictEqual(s.counts['PRAFF02C.00'], 0);
 assert.strictEqual(I.undo(s), null);
 
+// Typed amounts: add 60 at once, remove 60 (never below 0), undo the whole amount.
+const t = I.emptyState();
+I.change(t, 'PGIOTT07C', 60);
+assert.strictEqual(t.counts.PGIOTT07C, 60);
+I.change(t, 'PGIOTT07C', -100);
+assert.strictEqual(t.counts.PGIOTT07C, 0);
+assert.deepStrictEqual(I.undo(t), { part: 'PGIOTT07C', delta: -60 });
+assert.strictEqual(t.counts.PGIOTT07C, 60);
+assert.deepStrictEqual(I.undo(t), { part: 'PGIOTT07C', delta: 60 });
+assert.strictEqual(t.counts.PGIOTT07C, 0);
+assert.deepStrictEqual(['60', ' 12 ', '', '0', '-5', 'abc', '2.7', '1000000'].map(I.amount), [60, 12, 1, 1, 1, 1, 2, 99999]);
+
+// Overstock + Stockroom.
+const over = I.emptyState();
+const stock = I.emptyState();
+I.change(over, 'PRAFF02C.00', 5);
+I.change(stock, 'PRAFF02C.00', 7);
+I.change(stock, 'E.PMATIS10C.50', 3);
+const both = I.combine(over, stock);
+assert.strictEqual(both.counts['PRAFF02C.00'], 12);
+assert.strictEqual(both.counts['E.PMATIS10C.50'], 3);
+assert.strictEqual(I.total(both), 15);
+assert.strictEqual(over.counts['PRAFF02C.00'], 5); // inputs unchanged
+
 console.log('All inventory tests passed');
