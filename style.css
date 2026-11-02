@@ -198,14 +198,14 @@ body.on-inv .tab { padding: 6px 10px; }
 .inv-msg { flex: 1; min-width: 0; font-size: .85rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .inv-total { font-weight: 700; font-size: .9rem; white-space: nowrap; }
 .inv-grid { margin: 0 -8px; /* a little wider than the page margins, so long part numbers fit */ }
-.f-GIOTT { --fam: #1f6feb; }
-.f-RAFF { --fam: #8250df; }
-.f-MATIS { --fam: #1a7f37; }
+.f-GIOTT { --fam: #cf222e; }
+.f-RAFF { --fam: #82071e; }
+.f-MATIS { --fam: #14213d; }
 .f-ECS { --fam: #bc4c00; }
 @media (prefers-color-scheme: dark) {
-  .f-GIOTT { --fam: #58a6ff; }
-  .f-RAFF { --fam: #bc8cff; }
-  .f-MATIS { --fam: #3fb950; }
+  .f-GIOTT { --fam: #ff6b6b; }
+  .f-RAFF { --fam: #e06c75; }
+  .f-MATIS { --fam: #8fa8ff; }
   .f-ECS { --fam: #f0883e; }
 }
 .inv-cat-title {
@@ -221,13 +221,24 @@ body.on-inv .tab { padding: 6px 10px; }
   border: 1px solid var(--line); border-left: 6px solid var(--fam, var(--line));
   background: var(--card); color: var(--text); border-radius: 10px;
   user-select: none; -webkit-user-select: none; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none; /* no iPhone pop-up menu on press-and-hold */
 }
+.inv-btn.holding { outline: 3px solid #f0b400; outline-offset: -1px; }
+/* Part colours: GIOTTOS red; RAFFAELLOS .50 dark red, .00 off-white; MATISSES .501 navy, .50 white.
+   Same in dark mode, so they always look the same. */
+.inv-btn.c-red { background: #cf222e; color: #fff; border-color: #a40e26; }
+.inv-btn.c-darkred { background: #82071e; color: #fff; border-color: #5c0011; }
+.inv-btn.c-offwhite { background: #f2ecdc; color: #1b1f24; border-color: #d6cbb0; }
+.inv-btn.c-navy { background: #14213d; color: #fff; border-color: #34497a; }
+.inv-btn.c-white { background: #ffffff; color: #1b1f24; border-color: #c4cad3; }
+.inv-btn.c-red, .inv-btn.c-darkred, .inv-btn.c-navy { border-left-color: rgba(0,0,0,.35); }
 .inv-name { font-weight: 700; font-size: min(.95rem, 3.55vw); letter-spacing: -.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .inv-count { font-size: min(1.35rem, 5.2vw); font-weight: 800; font-variant-numeric: tabular-nums; min-width: 1.1em; text-align: right; }
-.inv-count.zero { color: var(--muted); font-weight: 600; }
+.inv-count.zero { opacity: .5; font-weight: 600; }
 .inv-btn:active { transform: scale(.97); }
-.inv-btn.flash { background: var(--ok-bg); }
-.inv-grid.removing .inv-btn { background: var(--bad-bg); border-color: var(--danger); }
+.inv-grid .inv-btn.flash { background: #2ea043; color: #fff; }
+/* Remove mode: a red ring on every button (keeps the part colours visible). */
+.inv-grid.removing .inv-btn { box-shadow: inset 0 0 0 3px var(--danger); }
 .inv-grid.removing .inv-btn.flash { background: var(--danger); color: #fff; }
 .inv-extra { margin-top: 14px; }
 .inv-extra .danger { margin-top: 0; }
@@ -244,3 +255,19 @@ body.on-inv .tab { padding: 6px 10px; }
 .inv-table tr.cat td { color: var(--fam); font-weight: 800; letter-spacing: .04em; font-size: .78rem; padding-top: 10px; border-bottom: 2px solid var(--fam); }
 .inv-table tr.grand td { font-weight: 800; font-size: 1rem; border-top: 2px solid var(--text); border-bottom: 0; padding-top: 8px; }
 .inv-table td.part { font-weight: 600; border-left: 4px solid var(--fam); padding-left: 6px; }
+
+/* Fix / delete a part's count (press and hold a part) */
+.sheet-backdrop { position: fixed; inset: 0; z-index: 30; background: rgba(0,0,0,.45); display: flex; align-items: flex-end; justify-content: center; }
+.sheet {
+  width: 100%; max-width: 520px; background: var(--card); color: var(--text);
+  border-radius: 16px 16px 0 0; padding: 16px 16px calc(18px + env(safe-area-inset-bottom));
+  box-shadow: 0 -4px 20px rgba(0,0,0,.25);
+}
+.sheet-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.sheet-part { font-size: 1.4rem; font-weight: 800; }
+.sheet-count { display: flex; align-items: center; justify-content: center; gap: 22px; margin: 14px 0 6px; }
+.sheet-count span { font-size: 2.6rem; font-weight: 800; min-width: 3ch; text-align: center; font-variant-numeric: tabular-nums; }
+.sheet-count button { font-size: 1.3rem; font-weight: 800; padding: 12px 20px; min-width: 72px; }
+#inv-edit-minus { color: var(--danger); border-color: var(--danger); }
+#inv-edit-form .row > input { font-size: 1.2rem; font-weight: 700; }
+#inv-edit-clear { margin-top: 14px; justify-content: center; }

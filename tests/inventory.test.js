@@ -66,4 +66,27 @@ assert.strictEqual(both.counts['E.PMATIS10C.50'], 3);
 assert.strictEqual(I.total(both), 15);
 assert.strictEqual(over.counts['PRAFF02C.00'], 5); // inputs unchanged
 
+// Setting an exact count (fixing a mistake), clearing to 0, and undoing it.
+const f = I.emptyState();
+I.change(f, 'PMATIS07L.50', 75);
+assert.strictEqual(I.setCount(f, 'PMATIS07L.50', 57), true);
+assert.strictEqual(f.counts['PMATIS07L.50'], 57);
+assert.strictEqual(I.setCount(f, 'PMATIS07L.50', 57), false);
+I.setCount(f, 'PMATIS07L.50', 0);
+assert.strictEqual(f.counts['PMATIS07L.50'], 0);
+I.undo(f);
+assert.strictEqual(f.counts['PMATIS07L.50'], 57);
+I.undo(f);
+assert.strictEqual(f.counts['PMATIS07L.50'], 75);
+I.setCount(f, 'PMATIS07L.50', -3);
+assert.strictEqual(f.counts['PMATIS07L.50'], 0);
+
+// Button colours.
+assert.ok(I.PARTS.filter((p) => p.startsWith('PGIOT')).every((p) => I.color(p) === 'red'));
+assert.deepStrictEqual(['PRAFF02SC.50', 'PRAFF04C.50', 'PRAFF02C.00', 'PRAFF04S.00'].map(I.color), ['darkred', 'darkred', 'offwhite', 'offwhite']);
+assert.deepStrictEqual(['PMATIS07C.501', 'PMATIS10S.501', 'PMATIS07C.50', 'PMATIS15S.50'].map(I.color), ['navy', 'navy', 'white', 'white']);
+assert.strictEqual(I.color('E.PMATIS10C.501'), '');
+// Every RAFFAELLO and MATISSE part has one of its two colours.
+assert.ok(I.PARTS.filter((p) => /^P(RAFF|MATIS)/.test(p)).every((p) => I.color(p)));
+
 console.log('All inventory tests passed');

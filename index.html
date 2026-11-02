@@ -90,7 +90,7 @@
           </label>
           <button id="inv-export" type="button">⬇️ Excel</button>
         </div>
-        <div class="inv-line"><span id="inv-msg" class="inv-msg">Tap a part to add 1.</span></div>
+        <div class="inv-line"><span id="inv-msg" class="inv-msg">Tap to add 1 · hold a part to fix or delete</span></div>
         <div id="inv-grid" class="inv-grid"></div>
         <div class="row wrap inv-extra">
           <button id="inv-reset" type="button" class="danger">Reset counts</button>
@@ -106,6 +106,32 @@
           <thead><tr><th>Part number</th><th>Overstock</th><th>Stockroom</th><th>Total</th></tr></thead>
           <tbody id="inv-table-body"></tbody>
         </table>
+      </div>
+
+      <!-- Opened by pressing and holding a part: fix or delete its count. -->
+      <div id="inv-edit" class="sheet-backdrop" hidden>
+        <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="inv-edit-part">
+          <div class="sheet-head">
+            <div>
+              <div id="inv-edit-set" class="muted"></div>
+              <div id="inv-edit-part" class="sheet-part"></div>
+            </div>
+            <button id="inv-edit-close" type="button">Close</button>
+          </div>
+          <div class="sheet-count">
+            <button id="inv-edit-minus" type="button" aria-label="Take 1 off">−1</button>
+            <span id="inv-edit-count">0</span>
+            <button id="inv-edit-plus" type="button" aria-label="Add 1">+1</button>
+          </div>
+          <form id="inv-edit-form" autocomplete="off">
+            <label for="inv-edit-input">Correct count</label>
+            <div class="row">
+              <input id="inv-edit-input" type="number" inputmode="numeric" min="0" step="1" enterkeyhint="done">
+              <button type="submit" class="primary">Set</button>
+            </div>
+          </form>
+          <button id="inv-edit-clear" type="button" class="danger wide">🗑 Delete count (set to 0)</button>
+        </div>
       </div>
     </section>
 

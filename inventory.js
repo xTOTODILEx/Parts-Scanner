@@ -60,6 +60,19 @@
     return category(part).key;
   }
 
+  // Button colour for a part:
+  // GIOTTOS all red; RAFFAELLOS ".50" dark red and ".00" off-white; MATISSES ".501" navy and ".50" white.
+  // Other parts (e.g. ECS) keep the plain button.
+  function color(part) {
+    const p = String(part);
+    switch (category(p).key) {
+      case 'GIOTT': return 'red';
+      case 'RAFF': return /\.50$/.test(p) ? 'darkred' : /\.00$/.test(p) ? 'offwhite' : '';
+      case 'MATIS': return /\.501$/.test(p) ? 'navy' : /\.50$/.test(p) ? 'white' : '';
+      default: return '';
+    }
+  }
+
   // The categories with their parts, in list order; categories with no parts are left out.
   function groups() {
     const out = [];
@@ -90,6 +103,13 @@
     return true;
   }
 
+  // Set a part's count to an exact number (e.g. to correct a mistake, or 0 to clear it).
+  // Recorded like any other change, so Undo brings the old count back. Returns true if it changed.
+  function setCount(state, part, n) {
+    const target = Math.max(0, Math.floor(Number(n)) || 0);
+    return change(state, part, target - (state.counts[part] || 0));
+  }
+
   // Undo the last change. Returns the undone { part, delta } or null if there is nothing to undo.
   function undo(state) {
     const last = state.log.pop();
@@ -115,7 +135,7 @@
     return Number.isFinite(n) && n >= 1 ? Math.min(n, 99999) : 1;
   }
 
-  const api = { PARTS, CATEGORIES, category, family, groups, emptyState, change, undo, total, combine, amount };
+  const api = { PARTS, CATEGORIES, category, family, color, groups, emptyState, change, setCount, undo, total, combine, amount };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Inventory = api;
 })(typeof window !== 'undefined' ? window : this);

@@ -616,7 +616,7 @@
     $('inv-mode').textContent = '− Remove';
     clearQty();
     renderInventory();
-    if (view !== 'total') invMsg('Counting ' + INV_SETS[view].name + '. Tap a part to add 1.');
+    if (view !== 'total') invMsg('Counting ' + INV_SETS[view].name + ' · hold a part to fix or delete');
     window.scrollTo(0, 0);
     sizeInvGrid();
   }
@@ -642,7 +642,8 @@
         el('div', { class: 'inv-cat-title' }, el('span', {}, g.name), el('span', {}, String(Inventory.total(st, g.parts)))),
         el('div', { class: 'inv-cat-grid' }, g.parts.map((part) => {
           const n = st.counts[part] || 0;
-          return el('button', { type: 'button', class: 'inv-btn', 'data-part': part, onclick: () => tapPart(part) },
+          const color = Inventory.color(part);
+          return el('button', { type: 'button', class: 'inv-btn' + (color ? ' c-' + color : ''), 'data-part': part, onclick: () => tapPart(part) },
             el('span', { class: 'inv-name' }, part),
             el('span', { class: 'inv-count' + (n ? '' : ' zero') }, String(n)));
         }))));
@@ -690,12 +691,14 @@
     const set = $('inv-qty').value.trim() !== '' && n > 1;
     $('inv-qty').classList.toggle('set', set);
     if (set) invMsg('Now tap a part to ' + (invRemove ? 'take off ' : 'add ') + n + '.', 'qty');
-    else invMsg(invRemove ? 'Removing: tap a part to take 1 off.' : 'Tap a part to add 1.');
+    else invMsg(invRemove ? 'Removing: tap a part to take 1 off.' : 'Tap to add 1 · hold a part to fix or delete');
   });
   // "Done"/Enter closes the number keyboard so the parts can be tapped.
   $('inv-qty').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('inv-qty').blur(); });
 
   function tapPart(part) {
+    // The finger lifting at the end of a press-and-hold also counts as a tap on that part: ignore it.
+    if (invIgnoreTap && invIgnoreTap.part === part && Date.now() < invIgnoreTap.until) { invIgnoreTap = null; return; }
     const st = invCur();
     const n = qtyValue();
     const delta = invRemove ? -n : n;
@@ -714,6 +717,91 @@
     invMsg((changed > 0 ? '+' : '−') + Math.abs(changed) + ' ' + part + ' → ' + st.counts[part] + ' (' + INV_SETS[invView].name + ')');
   }
 
+  // ---- Press and hold a part to fix or delete its count ----
+  let invIgnoreTap = null; // { part, until }
+  let invHold = null; // { timer, x, y, btn }
+  let invEditPart = '';
+
+  const invGridEl = $('inv-grid');
+  invGridEl.addEventListener('pointerdown', (e) => {
+    const btn = e.target.closest('.inv-btn');
+    if (!btn) return;
+    cancelHold();
+    btn.classList.add('holding');
+    invHold = { btn, x: e.clientX, y: e.clientY, timer: setTimeout(() => {
+      const part = btn.dataset.part;
+      cancelHold();
+      invIgnoreTap = { part, until: Date.now() + 1500 };
+      try { if (navigator.vibrate) navigator.vibrate(40); } catch (err) { /* ignore */ }
+      openEditor(part);
+    }, 500) };
+  });
+  invGridEl.addEventListener('pointermove', (e) => {
+    if (invHold && Math.hypot(e.clientX - invHold.x, e.clientY - invHold.y) > 12) cancelHold();
+  });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach((t) => invGridEl.addEventListener(t, cancelHold));
+  invGridEl.addEventListener('contextmenu', (e) => { if (e.target.closest('.inv-btn')) e.preventDefault(); });
+
+  function cancelHold() {
+    if (!invHold) return;
+    clearTimeout(invHold.timer);
+    invHold.btn.classList.remove('holding');
+    invHold = null;
+  }
+
+  function openEditor(part) {
+    invEditPart = part;
+    $('inv-edit-set').textContent = INV_SETS[invView].name;
+    $('inv-edit-part').textContent = part;
+    $('inv-edit-input').value = '';
+    renderEditor();
+    $('inv-edit').hidden = false;
+  }
+
+  function closeEditor() {
+    $('inv-edit').hidden = true;
+    $('inv-edit-input').blur();
+    invEditPart = '';
+  }
+
+  function renderEditor() {
+    const n = invCur().counts[invEditPart] || 0;
+    $('inv-edit-count').textContent = n;
+    $('inv-edit-input').placeholder = String(n);
+    $('inv-edit-minus').disabled = n === 0;
+    $('inv-edit-clear').disabled = n === 0;
+  }
+
+  // Apply a change from the editor; it is recorded like a tap, so Undo works too.
+  function editChange(fn, what) {
+    const st = invCur();
+    const before = st.counts[invEditPart] || 0;
+    if (!fn(st)) return;
+    saveInventory();
+    renderInventory();
+    renderEditor();
+    invMsg(what + ' ' + invEditPart + ': ' + before + ' → ' + (st.counts[invEditPart] || 0) + ' (' + INV_SETS[invView].name + ')');
+  }
+
+  $('inv-edit-minus').addEventListener('click', () => editChange((st) => Inventory.change(st, invEditPart, -1), 'Removed 1 from'));
+  $('inv-edit-plus').addEventListener('click', () => editChange((st) => Inventory.change(st, invEditPart, 1), 'Added 1 to'));
+  $('inv-edit-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const v = $('inv-edit-input').value.trim();
+    if (v === '' || !(Number(v) >= 0)) { toast('Type the correct count, e.g. 57'); return; }
+    editChange((st) => Inventory.setCount(st, invEditPart, v), 'Set');
+    closeEditor();
+  });
+  $('inv-edit-clear').addEventListener('click', () => {
+    const n = invCur().counts[invEditPart] || 0;
+    if (!n || !confirm('Delete all ' + n + ' counted for ' + invEditPart + ' (' + INV_SETS[invView].name + ')?')) return;
+    editChange((st) => Inventory.setCount(st, invEditPart, 0), 'Deleted count of');
+    closeEditor();
+  });
+  $('inv-edit-close').addEventListener('click', closeEditor);
+  $('inv-edit').addEventListener('click', (e) => { if (e.target === $('inv-edit')) closeEditor(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('inv-edit').hidden) closeEditor(); });
+
   function invMsg(text, kind) {
     $('inv-msg').textContent = text;
     $('inv-msg').className = 'inv-msg' + (kind ? ' ' + kind : '');
@@ -723,7 +811,7 @@
     invRemove = !invRemove;
     $('inv-mode').setAttribute('aria-pressed', String(invRemove));
     $('inv-mode').textContent = invRemove ? '− Removing' : '− Remove';
-    invMsg(invRemove ? 'Removing: tap a part to take ' + qtyValue() + ' off. Tap "Removing" to stop.' : 'Tap a part to add ' + qtyValue() + '.');
+    invMsg(invRemove ? 'Removing: tap a part to take ' + qtyValue() + ' off. Tap "Removing" to stop.' : 'Tap to add ' + qtyValue() + ' · hold a part to fix or delete');
     renderInventory();
   });
 
