@@ -31,8 +31,11 @@ On Overstock and Stockroom, every part number is a button, all on one screen, gr
 - **MATISSES**: parts starting with PMATIS
 - **ECS PARTS**: parts starting with E. (for example E.PMATIS10C.501)
 
+Button colours: GIOTTOS red; RAFFAELLOS ending .50 dark red and .00 off-white; MATISSES ending .501 navy blue and .50 white.
+
 - **Tap a part** to add 1 to its count.
 - **Qty**: type an amount (for example 60), then tap a part to add that many at once. The box goes back to 1 after that tap.
+- **Press and hold a part** to fix it: take 1 off or add 1, type the correct count and tap **Set**, or **Delete count** to set it to 0.
 - **↶ Undo** takes back the last change (a whole Qty amount at once).
 - **− Remove**: while it's on (red, "Removing"), tapping a part takes 1 (or the Qty amount) off. Tap it again to go back to adding.
 - **⬇️ Excel** (on any view, or **Export inventory to Excel** on the 📊 Excel tab) downloads one Excel file with everything: a **Total** sheet (Category, Part number, Overstock, Stockroom, Total), plus an **Overstock** sheet and a **Stockroom** sheet. Each has a subtotal after each category and a Total row.
